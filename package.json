@@ -1,0 +1,37 @@
+{
+  "name": "social-media-agents",
+  "version": "0.1.0",
+  "description": "Scaffold AI-powered social media content pipelines in minutes",
+  "type": "module",
+  "bin": {
+    "social-media-agents": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "social-media",
+    "ai-agents",
+    "content-pipeline",
+    "instagram",
+    "openai",
+    "trigger.dev",
+    "paperclip"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@clack/prompts": "^0.9.0",
+    "openai": "^4.85.0",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
