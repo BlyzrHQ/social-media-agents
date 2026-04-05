@@ -3,7 +3,7 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { execSync } from "child_process";
 import * as path from "path";
-import { collectBrandInfo, collectApiKeys, confirmGptUsage } from "./prompts.js";
+import { collectBrandInfo, collectBrandFromWebsite, collectApiKeys, confirmGptUsage } from "./prompts.js";
 import { generateCustomPrompts } from "./generators/agents.js";
 import { scaffoldProject } from "./generators/project.js";
 import { generateConvexFiles } from "./generators/convex.js";
@@ -26,15 +26,28 @@ async function main() {
     "Welcome"
   );
 
-  // Step 1: Collect brand info
+  // Step 1: Collect OpenAI key first (needed for website analysis)
+  const openaiKeyPrompt = await p.text({
+    message: "OpenAI API Key (needed for website analysis + brand customization)",
+    placeholder: "sk-proj-...",
+    validate: (v) => (v.startsWith("sk-") ? undefined : "OpenAI key should start with sk-"),
+  });
+  if (p.isCancel(openaiKeyPrompt)) { p.cancel("Setup cancelled."); process.exit(0); }
+  const openaiApiKey = openaiKeyPrompt as string;
+
+  // Step 2: Try website analysis (auto-fill brand info)
+  const websitePrefill = await collectBrandFromWebsite(openaiApiKey);
+
+  // Step 3: Collect brand info (pre-filled if website worked)
   const s1 = p.spinner();
-  const brand = await collectBrandInfo();
+  const brand = await collectBrandInfo(websitePrefill);
 
-  // Step 2: Collect API keys
+  // Step 4: Collect remaining API keys
   const keysResult = await collectApiKeys();
-  const { hasShopify, ...keys } = keysResult;
+  const { hasShopify, ...keysRest } = keysResult;
+  const keys = { ...keysRest, openaiApiKey };
 
-  // Step 3: Confirm GPT-4o usage
+  // Step 5: Confirm GPT-4o usage for prompt generation
   await confirmGptUsage();
 
   // Step 4: Generate custom prompts
