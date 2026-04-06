@@ -5,6 +5,7 @@ import { execSync } from "child_process";
 import * as path from "path";
 import { collectBrandInfo, askForWebsite, analyzeWebsiteUrl, collectApiKeys, confirmGptUsage } from "./prompts.js";
 import { generateCustomPrompts } from "./generators/agents.js";
+import { findTopPosts } from "./post-analyzer.js";
 import { scaffoldProject } from "./generators/project.js";
 import { generateConvexFiles } from "./generators/convex.js";
 import { generatePaperclipFiles } from "./generators/paperclip.js";
@@ -45,12 +46,49 @@ async function main() {
   // Step 5: Confirm GPT-4o usage for prompt generation
   await confirmGptUsage();
 
-  // Step 4: Generate custom prompts
+  // Step 6: Search for top posts and analyze them for templates
+  const s1a = p.spinner();
+  s1a.start("Searching for top posts in your niche...");
+  let topPostTemplates: import("./types.js").TemplateDefinition[] = [];
+  try {
+    topPostTemplates = await findTopPosts(
+      brand.name,
+      websitePrefill?.industry || brand.contentTypes[0] || "lifestyle",
+      keys.openaiApiKey
+    );
+    if (topPostTemplates.length > 0) {
+      s1a.stop(`Found ${topPostTemplates.length} high-engagement post styles!`);
+      p.note(
+        topPostTemplates
+          .map((t, i) => `${pc.cyan(`${i + 1}.`)} ${t.displayName}\n   ${t.description}`)
+          .join("\n\n"),
+        "Templates from top posts"
+      );
+    } else {
+      s1a.stop("No top posts found — will generate templates from brand description.");
+    }
+  } catch {
+    s1a.stop("Post search skipped.");
+    topPostTemplates = [];
+  }
+
+  // Step 7: Generate custom prompts (merge with top post templates)
   s1.start("Generating custom prompts for your brand with GPT-4o...");
   let prompts;
   try {
     prompts = await generateCustomPrompts(brand, keys.openaiApiKey);
-    s1.stop("Custom prompts generated!");
+
+    // Merge top post templates with generated ones (top posts take priority)
+    if (topPostTemplates && topPostTemplates.length > 0) {
+      const existingNames = new Set(prompts.initialTemplates.map((t) => t.name));
+      for (const template of topPostTemplates) {
+        if (!existingNames.has(template.name)) {
+          prompts.initialTemplates.push(template);
+        }
+      }
+    }
+
+    s1.stop(`Custom prompts generated! (${prompts.initialTemplates.length} templates total)`);
   } catch (err) {
     s1.stop("Failed to generate prompts");
     p.cancel(
