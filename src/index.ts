@@ -138,21 +138,25 @@ async function main() {
     console.log("Run 'npm install' manually in your project directory.");
   }
 
-  // Step 9: Set up Paperclip
-  const setupPaperclipNow = await p.confirm({
-    message: "Set up Paperclip agent orchestration now? (requires Docker)",
-    initialValue: true,
-  });
-
-  if (!p.isCancel(setupPaperclipNow) && setupPaperclipNow) {
-    const s6 = p.spinner();
-    s6.start("Setting up Paperclip...");
-    try {
-      setupPaperclip(config);
-      s6.stop("Paperclip is running!");
-    } catch (err) {
-      s6.stop(`Paperclip setup failed: ${err instanceof Error ? err.message : String(err)}`);
-      console.log("You can set it up later by running:");
+  // Step 9: Set up Paperclip (automatic — no prompt)
+  const s6 = p.spinner();
+  s6.start("Setting up Paperclip agent orchestration...");
+  try {
+    // Check Docker first
+    execSync("docker --version", { stdio: "pipe" });
+    execSync("docker ps", { stdio: "pipe" });
+    setupPaperclip(config);
+    s6.stop("Paperclip is running with CEO, CMO, and Template Designer agents!");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Docker is not installed") || msg.includes("Docker is not running")) {
+      s6.stop("Docker not available — Paperclip setup skipped.");
+      console.log("Install Docker Desktop, then run:");
+      console.log(`  cd ${brand.projectDir}/paperclip && docker compose up -d`);
+    } else {
+      s6.stop("Paperclip setup had issues.");
+      console.log(`  Error: ${msg}`);
+      console.log("You can set it up manually:");
       console.log(`  cd ${brand.projectDir}/paperclip && docker compose up -d`);
     }
   }

@@ -86,7 +86,7 @@ export function setupPaperclip(config: ProjectConfig): void {
       ready = true;
       break;
     } catch {
-      try { execSync("sleep 2", { stdio: "pipe" }); } catch { /* windows */ }
+      execSync("node -e \"setTimeout(()=>{},2000)\"", { stdio: "pipe" });
     }
   }
 
@@ -96,27 +96,36 @@ export function setupPaperclip(config: ProjectConfig): void {
   }
 
   // Onboard
+  console.log("Running Paperclip onboard...");
   try {
-    dockerExec(paperclipDir, "pnpm paperclipai onboard -y", { timeout: 60_000 });
-  } catch {
-    console.log("Paperclip onboard may need manual setup. Visit http://localhost:3100");
+    dockerExec(paperclipDir, "pnpm paperclipai onboard -y", { timeout: 120_000 });
+    console.log("Onboard complete.");
+  } catch (err) {
+    console.log("Paperclip onboard failed:", err instanceof Error ? err.message : String(err));
+    console.log("Visit http://localhost:3100 to set up manually.");
     return;
   }
 
   // Wait for server restart
-  try { execSync("sleep 5", { stdio: "pipe" }); } catch { /* windows */ }
+  execSync("node -e \"setTimeout(()=>{},5000)\"", { stdio: "pipe" });
+
+  // Wait for server to restart after onboard
+  console.log("Waiting for Paperclip to restart...");
+  execSync("node -e \"setTimeout(()=>{},8000)\"", { stdio: "pipe" });
 
   // Bootstrap CEO
+  console.log("Creating admin account...");
   let inviteUrl = "";
   try {
     const result = dockerExec(paperclipDir, "pnpm paperclipai auth bootstrap-ceo", { timeout: 30_000, encoding: "utf8" });
     const urlMatch = result.match(/(http:\/\/.*\/invite\/pcp_bootstrap_\w+)/);
     if (urlMatch) {
       inviteUrl = urlMatch[1];
-      console.log(`\nPaperclip invite URL: ${inviteUrl}`);
+      console.log(`Invite URL: ${inviteUrl}`);
     }
-  } catch {
-    console.log("Run this to get your login:\n  cd paperclip && docker compose exec paperclip pnpm paperclipai auth bootstrap-ceo");
+  } catch (err) {
+    console.log("Bootstrap CEO failed:", err instanceof Error ? err.message : String(err));
+    console.log("Run manually:\n  cd paperclip && docker compose exec paperclip pnpm paperclipai auth bootstrap-ceo");
   }
 
   // Find company ID
