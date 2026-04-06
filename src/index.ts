@@ -163,29 +163,20 @@ async function main() {
 
   // Done!
   const projectPath = path.resolve(brand.projectDir);
-  // Step 10: Seed templates into SQLite
-  const s7 = p.spinner();
-  s7.start("Seeding templates into database...");
-  try {
-    execSync("npx tsx src/seed.ts", {
-      cwd: path.resolve(brand.projectDir),
-      stdio: "pipe",
-      timeout: 30_000,
-    });
-    s7.stop(`Seeded ${config.prompts.initialTemplates.length} templates!`);
-  } catch {
-    s7.stop("Template seeding skipped — run 'npx tsx src/seed.ts' manually.");
-  }
 
   p.note(
     `${pc.green("Your project is ready!")} Here's what to do:\n\n` +
-      `${pc.cyan("1.")} Run the pipeline:\n` +
-      `   cd ${brand.projectDir} && npx tsx src/cli.ts run pipeline\n\n` +
-      `${pc.cyan("2.")} Check pipeline health:\n` +
-      `   npx tsx src/cli.ts status\n\n` +
-      `${pc.cyan("3.")} Paperclip dashboard:\n` +
+      `${pc.cyan("1.")} Set up Convex:\n` +
+      `   cd ${brand.projectDir} && npx convex login && npx convex deploy\n\n` +
+      `${pc.cyan("2.")} Update .env with your Convex URL and auth token\n\n` +
+      `${pc.cyan("3.")} Seed initial templates:\n` +
+      `   npx convex run seed:seedTemplates\n\n` +
+      `${pc.cyan("4.")} Set up Trigger.dev:\n` +
+      `   npx trigger.dev@latest init && npx trigger.dev@latest dev\n\n` +
+      `${pc.cyan("5.")} Run the pipeline:\n` +
+      `   npx tsx src/cli.ts run pipeline\n\n` +
+      `${pc.cyan("6.")} Paperclip dashboard:\n` +
       `   http://localhost:3100\n\n` +
-      `Database: ${brand.projectDir}/data/pipeline.db (SQLite)\n` +
       `Project: ${projectPath}`,
     "Next Steps"
   );
