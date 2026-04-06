@@ -186,6 +186,7 @@ export function generateServices(): {
 } {
   return {
     database: `import Database from "better-sqlite3";
+import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 
@@ -194,7 +195,6 @@ let _db: Database.Database | null = null;
 
 function getDb(): Database.Database {
   if (_db) return _db;
-  const fs = require("fs");
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   _db = new Database(DB_PATH);
   _db.pragma("journal_mode = WAL");
@@ -372,7 +372,6 @@ export async function convexMutation<T = unknown>(path: string, args: Record<str
 export async function convexAction<T = unknown>(path: string, args: Record<string, unknown> = {}): Promise<T> {
   if (path === 'files:uploadBase64Image') {
     // Save image locally and return a file:// URL
-    const fs = require('fs');
     const imgDir = path.join(process.cwd(), 'data', 'images');
     fs.mkdirSync(imgDir, { recursive: true });
     const filename = crypto.randomBytes(8).toString('hex') + '.jpg';
