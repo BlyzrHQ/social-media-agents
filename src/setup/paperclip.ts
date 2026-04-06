@@ -13,6 +13,7 @@ function dockerExec(paperclipDir: string, cmd: string, opts?: { timeout?: number
 }
 
 function createAgentViaApi(paperclipDir: string, companyId: string, agent: { name: string; role: string; reportsTo?: string; adapterType: string }): string | null {
+  // Valid roles: ceo, cto, cmo, cfo, engineer, designer, pm, qa, devops, researcher, general
   try {
     const body = JSON.stringify({
       name: agent.name,
@@ -189,7 +190,7 @@ export function setupPaperclip(config: ProjectConfig): void {
   // Create CMO via API
   const cmoId = createAgentViaApi(paperclipDir, companyId, {
     name: "CMO",
-    role: "manager",
+    role: "cmo",
     reportsTo: ceoAgentId,
     adapterType: "claude_local",
   });
@@ -208,7 +209,7 @@ export function setupPaperclip(config: ProjectConfig): void {
   // Create Template Designer via API
   const tdId = createAgentViaApi(paperclipDir, companyId, {
     name: "Template Designer",
-    role: "ic",
+    role: "designer",
     reportsTo: cmoId || ceoAgentId,
     adapterType: "claude_local",
   });
@@ -230,6 +231,18 @@ export function setupPaperclip(config: ProjectConfig): void {
       `docker compose exec -T -u root paperclip chown -R node:node ${agentBase}`,
       { cwd: paperclipDir, stdio: "pipe", timeout: 10_000 }
     );
+  } catch { /* non-critical */ }
+
+  // Switch to authenticated mode now that agents are created
+  try {
+    dockerExec(
+      paperclipDir,
+      `node -e "const fs=require('fs');const p='/paperclip/instances/default/config.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.server.deploymentMode='authenticated';fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('Switched to authenticated mode')"`,
+      { timeout: 10_000, encoding: "utf8" }
+    );
+    // Restart to apply
+    execSync("docker compose restart", { cwd: paperclipDir, stdio: "pipe", timeout: 60_000 });
+    execSync("node -e \"setTimeout(()=>{},5000)\"", { stdio: "pipe" });
   } catch { /* non-critical */ }
 
   console.log("\nPaperclip is ready!");

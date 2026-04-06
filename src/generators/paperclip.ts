@@ -23,7 +23,7 @@ export function generatePaperclipFiles(config: ProjectConfig): void {
       PAPERCLIP_HOME: "/paperclip"
       OPENAI_API_KEY: "${config.keys.openaiApiKey}"
       BETTER_AUTH_SECRET: "social-agents-${Date.now()}"
-      PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
+      PAPERCLIP_DEPLOYMENT_MODE: "open"
       PAPERCLIP_DEPLOYMENT_EXPOSURE: "private"
       PAPERCLIP_PUBLIC_URL: "http://localhost:3100"
     volumes:
