@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import type { ProjectConfig } from "../types.js";
 
 function dockerExec(paperclipDir: string, cmd: string, opts?: { timeout?: number; encoding?: "utf8" }): string {
@@ -12,83 +13,41 @@ function dockerExec(paperclipDir: string, cmd: string, opts?: { timeout?: number
   }) as string;
 }
 
-function createAgentViaApi(paperclipDir: string, companyId: string, agent: { name: string; role: string; reportsTo?: string; adapterType: string }): string | null {
-  // Valid roles: ceo, cto, cmo, cfo, engineer, designer, pm, qa, devops, researcher, general
-  try {
-    const body = JSON.stringify({
-      name: agent.name,
-      role: agent.role,
-      reportsTo: agent.reportsTo || null,
-      adapterType: agent.adapterType,
-      adapterConfig: { dangerouslySkipPermissions: true },
-    });
-    const result = dockerExec(
-      paperclipDir,
-      `node -e "
-        const http = require('http');
-        const body = '${body.replace(/'/g, "\\'")}';
-        const opts = {hostname:'localhost',port:3100,path:'/api/companies/${companyId}/agents',method:'POST',headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)}};
-        const req = http.request(opts, res => {
-          let d = '';
-          res.on('data', c => d += c);
-          res.on('end', () => console.log(d));
-        });
-        req.write(body);
-        req.end();
-      "`,
-      { timeout: 15_000, encoding: "utf8" }
-    );
-    const match = result.match(/"id"\s*:\s*"([a-f0-9-]+)"/);
-    return match ? match[1] : null;
-  } catch {
-    return null;
-  }
+function waitMs(ms: number) {
+  execSync(`node -e "setTimeout(()=>{},${ms})"`, { stdio: "pipe" });
 }
 
 export function setupPaperclip(config: ProjectConfig): void {
   const paperclipDir = path.resolve(config.brand.projectDir, "paperclip");
 
   // Check Docker
-  try {
-    execSync("docker --version", { stdio: "pipe" });
-  } catch {
-    throw new Error("Docker is not installed. Install Docker Desktop from https://docker.com and try again.");
+  try { execSync("docker --version", { stdio: "pipe" }); } catch {
+    throw new Error("Docker is not installed. Install Docker Desktop from https://docker.com");
   }
-
-  try {
-    execSync("docker ps", { stdio: "pipe" });
-  } catch {
-    throw new Error("Docker is not running. Start Docker Desktop and try again.");
+  try { execSync("docker ps", { stdio: "pipe" }); } catch {
+    throw new Error("Docker is not running. Start Docker Desktop.");
   }
 
   // Start Paperclip
   try {
-    execSync("docker compose up -d", {
-      cwd: paperclipDir,
-      stdio: "inherit",
-      timeout: 300_000,
-    });
+    execSync("docker compose up -d", { cwd: paperclipDir, stdio: "inherit", timeout: 300_000 });
   } catch {
-    console.log("Failed to start Paperclip. Start it manually:");
+    console.log("Failed to start Paperclip. Run manually:");
     console.log(`  cd ${paperclipDir} && docker compose up -d`);
     return;
   }
 
-  // Wait for ready
+  // Wait for ready (up to 90 seconds)
   console.log("Waiting for Paperclip to start...");
   let ready = false;
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 45; i++) {
     try {
-      dockerExec(
-        paperclipDir,
+      dockerExec(paperclipDir,
         `node -e "const h=require('http');h.get('http://localhost:3100/api/health',r=>{r.on('data',()=>{});r.on('end',()=>process.exit(r.statusCode===200?0:1))})"`,
-        { timeout: 5000, encoding: "utf8" }
-      );
+        { timeout: 5000, encoding: "utf8" });
       ready = true;
       break;
-    } catch {
-      execSync("node -e \"setTimeout(()=>{},2000)\"", { stdio: "pipe" });
-    }
+    } catch { waitMs(2000); }
   }
 
   if (!ready) {
@@ -102,17 +61,13 @@ export function setupPaperclip(config: ProjectConfig): void {
     dockerExec(paperclipDir, "pnpm paperclipai onboard -y", { timeout: 120_000 });
     console.log("Onboard complete.");
   } catch (err) {
-    console.log("Paperclip onboard failed:", err instanceof Error ? err.message : String(err));
-    console.log("Visit http://localhost:3100 to set up manually.");
+    console.log("Onboard failed:", err instanceof Error ? err.message : String(err));
     return;
   }
 
-  // Wait for server restart
-  execSync("node -e \"setTimeout(()=>{},5000)\"", { stdio: "pipe" });
-
-  // Wait for server to restart after onboard
-  console.log("Waiting for Paperclip to restart...");
-  execSync("node -e \"setTimeout(()=>{},8000)\"", { stdio: "pipe" });
+  // Wait for restart
+  console.log("Waiting for restart...");
+  waitMs(10_000);
 
   // Bootstrap CEO
   console.log("Creating admin account...");
@@ -125,129 +80,98 @@ export function setupPaperclip(config: ProjectConfig): void {
       console.log(`Invite URL: ${inviteUrl}`);
     }
   } catch (err) {
-    console.log("Bootstrap CEO failed:", err instanceof Error ? err.message : String(err));
-    console.log("Run manually:\n  cd paperclip && docker compose exec paperclip pnpm paperclipai auth bootstrap-ceo");
+    console.log("Bootstrap failed. Run manually:");
+    console.log("  cd paperclip && docker compose exec paperclip pnpm paperclipai auth bootstrap-ceo");
   }
 
-  // Find company ID
+  // Find company and CEO agent
   let companyId = "";
-  try {
-    companyId = dockerExec(
-      paperclipDir,
-      `node -e "const fs=require('fs');const d=fs.readdirSync('/paperclip/instances/default/companies');console.log(d[0]||'')"`,
-      { timeout: 10_000, encoding: "utf8" }
-    ).trim();
-  } catch {
-    console.log("Could not find company ID. Create agents manually.");
-    return;
-  }
-
-  if (!companyId) {
-    console.log("No company created. Create agents manually after logging in.");
-    return;
-  }
-
-  // Find CEO agent ID
   let ceoAgentId = "";
   try {
-    ceoAgentId = dockerExec(
-      paperclipDir,
+    companyId = dockerExec(paperclipDir,
+      `node -e "const fs=require('fs');const d=fs.readdirSync('/paperclip/instances/default/companies');console.log(d[0]||'')"`,
+      { timeout: 10_000, encoding: "utf8" }).trim();
+    ceoAgentId = dockerExec(paperclipDir,
       `node -e "const fs=require('fs');const d=fs.readdirSync('/paperclip/instances/default/companies/${companyId}/agents');console.log(d[0]||'')"`,
-      { timeout: 10_000, encoding: "utf8" }
-    ).trim();
+      { timeout: 10_000, encoding: "utf8" }).trim();
   } catch {
-    console.log("Could not find CEO agent.");
+    console.log("Could not find company/CEO. Create agents manually.");
     return;
   }
 
-  console.log("Setting up agents...");
+  if (!companyId || !ceoAgentId) {
+    console.log("No company found. Create agents manually after logging in.");
+    return;
+  }
+
+  console.log("Creating agents...");
   const agentBase = `/paperclip/instances/default/companies/${companyId}/agents`;
+  const cmoId = crypto.randomUUID();
+  const tdId = crypto.randomUUID();
 
-  // Helper to write file inside container
-  const writeAgentFile = (agentId: string, filename: string, content: string) => {
-    const escaped = content.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n");
-    dockerExec(
-      paperclipDir,
-      `node -e "const fs=require('fs');fs.mkdirSync('${agentBase}/${agentId}/instructions',{recursive:true});fs.writeFileSync('${agentBase}/${agentId}/instructions/${filename}','${escaped}')"`,
-      { timeout: 10_000, encoding: "utf8" }
-    );
-  };
+  // Insert agents directly into PostgreSQL
+  try {
+    const insertSql = `
+      INSERT INTO agent (id, company_id, name, role, reports_to, adapter_type, adapter_config, status, created_at, updated_at)
+      VALUES
+        ('${cmoId}', '${companyId}', 'CMO', 'cmo', '${ceoAgentId}', 'claude_local', '{"dangerouslySkipPermissions":true}', 'idle', NOW(), NOW()),
+        ('${tdId}', '${companyId}', 'Template Designer', 'designer', '${cmoId}', 'claude_local', '{"dangerouslySkipPermissions":true}', 'idle', NOW(), NOW())
+      ON CONFLICT DO NOTHING;
+    `.replace(/\n/g, " ").replace(/\s+/g, " ");
 
-  // Read instruction files
+    dockerExec(paperclipDir,
+      `node -e "
+        const pg = require('/app/node_modules/pg/lib/index.js');
+        const pool = new pg.Pool({host:'localhost',port:54329,user:'paperclip',password:'paperclip',database:'paperclip'});
+        pool.query(\\"${insertSql.replace(/"/g, '\\"')}\\").then(() => {
+          console.log('Agents inserted');
+          return pool.end();
+        }).catch(e => { console.log('DB error:', e.message); pool.end(); });
+      "`,
+      { timeout: 15_000, encoding: "utf8" });
+    console.log("  CMO and Template Designer created in database.");
+  } catch (err) {
+    console.log("  DB insert failed:", err instanceof Error ? err.message : String(err));
+    console.log("  Create CMO and Template Designer manually in the dashboard.");
+  }
+
+  // Write instruction files
   const ceoAgentsMd = fs.readFileSync(path.join(paperclipDir, "ceo-AGENTS.md"), "utf8");
   const cmoAgentsMd = fs.readFileSync(path.join(paperclipDir, "cmo-AGENTS.md"), "utf8");
   const tdAgentsMd = fs.readFileSync(path.join(paperclipDir, "template-designer-AGENTS.md"), "utf8");
   const triggerMd = fs.readFileSync(path.join(paperclipDir, "TRIGGER.md"), "utf8");
 
-  // Configure CEO
+  const writeFile = (agentId: string, filename: string, content: string) => {
+    const escaped = content.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n");
+    dockerExec(paperclipDir,
+      `node -e "const fs=require('fs');fs.mkdirSync('${agentBase}/${agentId}/instructions',{recursive:true});fs.writeFileSync('${agentBase}/${agentId}/instructions/${filename}','${escaped}')"`,
+      { timeout: 10_000, encoding: "utf8" });
+  };
+
   try {
-    writeAgentFile(ceoAgentId, "AGENTS.md", ceoAgentsMd);
-    console.log("  CEO agent configured.");
-  } catch {
-    console.log("  Could not configure CEO agent.");
-  }
-
-  // Create CMO via API
-  const cmoId = createAgentViaApi(paperclipDir, companyId, {
-    name: "CMO",
-    role: "cmo",
-    reportsTo: ceoAgentId,
-    adapterType: "claude_local",
-  });
-  if (cmoId) {
-    try {
-      writeAgentFile(cmoId, "AGENTS.md", cmoAgentsMd);
-      writeAgentFile(cmoId, "TRIGGER.md", triggerMd);
-      console.log("  CMO agent created and configured.");
-    } catch {
-      console.log("  CMO created but could not write instructions.");
-    }
-  } else {
-    console.log("  Could not create CMO. Create it manually in the dashboard.");
-  }
-
-  // Create Template Designer via API
-  const tdId = createAgentViaApi(paperclipDir, companyId, {
-    name: "Template Designer",
-    role: "designer",
-    reportsTo: cmoId || ceoAgentId,
-    adapterType: "claude_local",
-  });
-  if (tdId) {
-    try {
-      writeAgentFile(tdId, "AGENTS.md", tdAgentsMd);
-      writeAgentFile(tdId, "TRIGGER.md", triggerMd);
-      console.log("  Template Designer agent created and configured.");
-    } catch {
-      console.log("  Template Designer created but could not write instructions.");
-    }
-  } else {
-    console.log("  Could not create Template Designer. Create it manually in the dashboard.");
+    writeFile(ceoAgentId, "AGENTS.md", ceoAgentsMd);
+    writeFile(cmoId, "AGENTS.md", cmoAgentsMd);
+    writeFile(cmoId, "TRIGGER.md", triggerMd);
+    writeFile(tdId, "AGENTS.md", tdAgentsMd);
+    writeFile(tdId, "TRIGGER.md", triggerMd);
+    console.log("  Instructions configured for all agents.");
+  } catch (err) {
+    console.log("  Could not write instructions:", err instanceof Error ? err.message : String(err));
   }
 
   // Fix permissions
   try {
-    execSync(
-      `docker compose exec -T -u root paperclip chown -R node:node ${agentBase}`,
-      { cwd: paperclipDir, stdio: "pipe", timeout: 10_000 }
-    );
+    execSync(`docker compose exec -T -u root paperclip chown -R node:node ${agentBase}`,
+      { cwd: paperclipDir, stdio: "pipe", timeout: 10_000 });
   } catch { /* non-critical */ }
 
-  // Switch to authenticated mode now that agents are created
+  // Restart Paperclip so it picks up the new agents
   try {
-    dockerExec(
-      paperclipDir,
-      `node -e "const fs=require('fs');const p='/paperclip/instances/default/config.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.server.deploymentMode='authenticated';fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('Switched to authenticated mode')"`,
-      { timeout: 10_000, encoding: "utf8" }
-    );
-    // Restart to apply
     execSync("docker compose restart", { cwd: paperclipDir, stdio: "pipe", timeout: 60_000 });
-    execSync("node -e \"setTimeout(()=>{},5000)\"", { stdio: "pipe" });
+    waitMs(5000);
   } catch { /* non-critical */ }
 
   console.log("\nPaperclip is ready!");
   console.log("  Dashboard: http://localhost:3100");
-  if (inviteUrl) {
-    console.log(`  Login: ${inviteUrl}`);
-  }
+  if (inviteUrl) console.log(`  Login: ${inviteUrl}`);
 }
