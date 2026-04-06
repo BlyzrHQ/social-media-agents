@@ -93,11 +93,11 @@ export function generateConfig(config: ProjectConfig): string {
 
 export interface Config {
   openaiApiKey: string;
-  googleAiKey: string;
+  googleAiKey: string | undefined;
   convexUrl: string;
   convexAuthToken: string;
-  igUserId: string;
-  igAccessToken: string;
+  igUserId: string | undefined;
+  igAccessToken: string | undefined;
 ${shopifyFields}
 }
 
@@ -113,11 +113,11 @@ export function getConfig(): Config {
   if (_config) return _config;
   _config = {
     openaiApiKey: required("OPENAI_API_KEY"),
-    googleAiKey: required("GOOGLE_AI_KEY"),
+    googleAiKey: process.env.GOOGLE_AI_KEY || undefined,
     convexUrl: required("CONVEX_URL"),
     convexAuthToken: required("CONVEX_AUTH_TOKEN"),
-    igUserId: required("IG_USER_ID"),
-    igAccessToken: required("IG_ACCESS_TOKEN"),
+    igUserId: process.env.IG_USER_ID || undefined,
+    igAccessToken: process.env.IG_ACCESS_TOKEN || undefined,
 ${shopifyRequired}
   };
   return _config;
@@ -236,6 +236,7 @@ import { convexAction } from "./convex.js";
 
 export async function generateImage(prompt: string): Promise<string> {
   const { googleAiKey } = getConfig();
+  if (!googleAiKey) throw new Error("GOOGLE_AI_KEY not set. Add it to .env to enable image generation.");
   const res = await fetch(\`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key=\${googleAiKey}\`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ["IMAGE", "TEXT"] } }),
@@ -255,8 +256,14 @@ export async function generateImage(prompt: string): Promise<string> {
     instagram: `import { getConfig } from "../config.js";
 const BASE = "https://graph.facebook.com/v19.0";
 
-export async function createMediaContainer(imageUrl: string, caption: string): Promise<string> {
+function igAuth() {
   const { igUserId, igAccessToken } = getConfig();
+  if (!igUserId || !igAccessToken) throw new Error("Instagram credentials not set. Add IG_USER_ID and IG_ACCESS_TOKEN to .env.");
+  return { igUserId, igAccessToken };
+}
+
+export async function createMediaContainer(imageUrl: string, caption: string): Promise<string> {
+  const { igUserId, igAccessToken } = igAuth();
   const params = new URLSearchParams({ image_url: imageUrl, caption, access_token: igAccessToken });
   const res = await fetch(\`\${BASE}/\${igUserId}/media?\${params}\`, { method: "POST" });
   if (!res.ok) throw new Error(\`IG media create failed: \${res.status}\`);
@@ -266,7 +273,7 @@ export async function createMediaContainer(imageUrl: string, caption: string): P
 }
 
 export async function publishMedia(creationId: string): Promise<string> {
-  const { igUserId, igAccessToken } = getConfig();
+  const { igUserId, igAccessToken } = igAuth();
   const params = new URLSearchParams({ creation_id: creationId, access_token: igAccessToken });
   const res = await fetch(\`\${BASE}/\${igUserId}/media_publish?\${params}\`, { method: "POST" });
   if (!res.ok) throw new Error(\`IG publish failed: \${res.status}\`);
@@ -277,6 +284,7 @@ export async function publishMedia(creationId: string): Promise<string> {
 
 export async function getPermalink(postId: string): Promise<string | null> {
   const { igAccessToken } = getConfig();
+  if (!igAccessToken) return null;
   try {
     const res = await fetch(\`\${BASE}/\${postId}?fields=permalink&access_token=\${igAccessToken}\`);
     if (!res.ok) return null;

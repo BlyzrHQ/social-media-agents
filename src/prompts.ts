@@ -3,9 +3,7 @@ import pc from "picocolors";
 import type { BrandConfig, ApiKeys } from "./types.js";
 import { analyzeWebsite, type WebsiteAnalysis } from "./website-analyzer.js";
 
-export async function collectBrandFromWebsite(
-  openaiApiKey: string
-): Promise<WebsiteAnalysis | null> {
+export async function askForWebsite(): Promise<string | null> {
   const hasWebsite = await p.confirm({
     message: "Do you have a website? (we'll auto-fill your brand info)",
     initialValue: true,
@@ -20,11 +18,17 @@ export async function collectBrandFromWebsite(
   });
 
   if (p.isCancel(url)) return null;
+  return url as string;
+}
 
+export async function analyzeWebsiteUrl(
+  url: string,
+  openaiApiKey: string
+): Promise<WebsiteAnalysis | null> {
   const s = p.spinner();
   s.start("Analyzing your website...");
   try {
-    const analysis = await analyzeWebsite(url as string, openaiApiKey);
+    const analysis = await analyzeWebsite(url, openaiApiKey);
     s.stop("Website analyzed!");
 
     p.note(
@@ -108,37 +112,39 @@ export async function collectBrandInfo(prefill?: WebsiteAnalysis | null): Promis
   return brand as BrandConfig;
 }
 
-export async function collectApiKeys(): Promise<Omit<ApiKeys, "openaiApiKey"> & { hasShopify: boolean }> {
+export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean }> {
   p.note(
-    "A few more API keys:\n" +
-      `${pc.cyan("Google AI")} — Gemini 3 Pro for image generation\n` +
-      `${pc.cyan("Instagram")} — Graph API for posting\n` +
-      `${pc.cyan("Shopify")} — (optional) for product-based content`,
-    "Required API Keys"
+    "API keys:\n" +
+      `${pc.cyan("OpenAI")} — GPT-4o for content generation and rating (required)\n` +
+      `${pc.cyan("Google AI")} — (optional) Gemini 3 Pro for image generation\n` +
+      `${pc.cyan("Instagram")} — (optional) Graph API for posting\n` +
+      `${pc.cyan("Shopify")} — (optional) for product-based content\n\n` +
+      `You can leave optional keys blank and add them to .env later.`,
+    "API Keys"
   );
 
   const keys = await p.group(
     {
+      openaiApiKey: () =>
+        p.text({
+          message: "OpenAI API Key",
+          placeholder: "sk-proj-...",
+          validate: (v) =>
+            v.startsWith("sk-") ? undefined : "OpenAI key should start with sk-",
+        }),
       googleAiKey: () =>
         p.text({
-          message: "Google AI Key (for Gemini)",
-          placeholder: "AIza...",
+          message: "Google AI Key (for Gemini — leave empty to skip image generation)",
+          placeholder: "AIza... (optional)",
           validate: (v) =>
-            v.startsWith("AIza") ? undefined : "Google AI key should start with AIza",
+            v.length === 0 || v.startsWith("AIza")
+              ? undefined
+              : "Leave empty or enter a key starting with AIza",
         }),
-      igUserId: () =>
-        p.text({
-          message: "Instagram User/Page ID",
-          placeholder: "e.g., 17841449043762185",
-          validate: (v) =>
-            v.length > 5 ? undefined : "Please enter a valid Instagram ID",
-        }),
-      igAccessToken: () =>
-        p.text({
-          message: "Instagram Access Token",
-          placeholder: "EAA...",
-          validate: (v) =>
-            v.length > 10 ? undefined : "Please enter a valid access token",
+      hasInstagram: () =>
+        p.confirm({
+          message: "Do you want to connect Instagram for posting?",
+          initialValue: false,
         }),
       hasShopify: () =>
         p.confirm({
@@ -153,6 +159,38 @@ export async function collectApiKeys(): Promise<Omit<ApiKeys, "openaiApiKey"> & 
       },
     }
   );
+
+  let igUserId: string | undefined;
+  let igAccessToken: string | undefined;
+
+  if (keys.hasInstagram) {
+    const ig = await p.group(
+      {
+        userId: () =>
+          p.text({
+            message: "Instagram User/Page ID",
+            placeholder: "e.g., 17841449043762185",
+            validate: (v) =>
+              v.length > 5 ? undefined : "Please enter a valid Instagram ID",
+          }),
+        token: () =>
+          p.text({
+            message: "Instagram Access Token",
+            placeholder: "EAA...",
+            validate: (v) =>
+              v.length > 10 ? undefined : "Please enter a valid access token",
+          }),
+      },
+      {
+        onCancel: () => {
+          p.cancel("Setup cancelled.");
+          process.exit(0);
+        },
+      }
+    );
+    igUserId = ig.userId;
+    igAccessToken = ig.token;
+  }
 
   let shopifyStore: string | undefined;
   let shopifyAccessToken: string | undefined;
@@ -191,9 +229,10 @@ export async function collectApiKeys(): Promise<Omit<ApiKeys, "openaiApiKey"> & 
   }
 
   return {
+    openaiApiKey: keys.openaiApiKey as string,
     googleAiKey: keys.googleAiKey as string,
-    igUserId: keys.igUserId as string,
-    igAccessToken: keys.igAccessToken as string,
+    igUserId,
+    igAccessToken,
     shopifyStore,
     shopifyAccessToken,
     hasShopify: keys.hasShopify as boolean,

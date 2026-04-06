@@ -3,7 +3,7 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { execSync } from "child_process";
 import * as path from "path";
-import { collectBrandInfo, collectBrandFromWebsite, collectApiKeys, confirmGptUsage } from "./prompts.js";
+import { collectBrandInfo, askForWebsite, analyzeWebsiteUrl, collectApiKeys, confirmGptUsage } from "./prompts.js";
 import { generateCustomPrompts } from "./generators/agents.js";
 import { scaffoldProject } from "./generators/project.js";
 import { generateConvexFiles } from "./generators/convex.js";
@@ -26,26 +26,21 @@ async function main() {
     "Welcome"
   );
 
-  // Step 1: Collect OpenAI key first (needed for website analysis)
-  const openaiKeyPrompt = await p.text({
-    message: "OpenAI API Key (needed for website analysis + brand customization)",
-    placeholder: "sk-proj-...",
-    validate: (v) => (v.startsWith("sk-") ? undefined : "OpenAI key should start with sk-"),
-  });
-  if (p.isCancel(openaiKeyPrompt)) { p.cancel("Setup cancelled."); process.exit(0); }
-  const openaiApiKey = openaiKeyPrompt as string;
+  // Step 1: Ask for website URL (if user has one)
+  const websiteUrl = await askForWebsite();
 
-  // Step 2: Try website analysis (auto-fill brand info)
-  const websitePrefill = await collectBrandFromWebsite(openaiApiKey);
+  // Step 2: Collect API keys (OpenAI needed for website analysis + prompt gen)
+  const keysResult = await collectApiKeys();
+  const { hasShopify, ...keys } = keysResult;
 
-  // Step 3: Collect brand info (pre-filled if website worked)
+  // Step 3: Analyze website now that we have the OpenAI key
+  const websitePrefill = websiteUrl
+    ? await analyzeWebsiteUrl(websiteUrl, keys.openaiApiKey)
+    : null;
+
+  // Step 4: Collect brand info (pre-filled if website analysis worked)
   const s1 = p.spinner();
   const brand = await collectBrandInfo(websitePrefill);
-
-  // Step 4: Collect remaining API keys
-  const keysResult = await collectApiKeys();
-  const { hasShopify, ...keysRest } = keysResult;
-  const keys = { ...keysRest, openaiApiKey };
 
   // Step 5: Confirm GPT-4o usage for prompt generation
   await confirmGptUsage();
@@ -127,7 +122,7 @@ async function main() {
     const s6 = p.spinner();
     s6.start("Setting up Paperclip...");
     try {
-      setupPaperclip(brand.projectDir);
+      setupPaperclip(config);
       s6.stop("Paperclip is running!");
     } catch (err) {
       s6.stop(`Paperclip setup failed: ${err instanceof Error ? err.message : String(err)}`);

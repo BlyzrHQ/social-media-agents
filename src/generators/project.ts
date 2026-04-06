@@ -95,11 +95,11 @@ export function scaffoldProject(config: ProjectConfig): void {
   // .env
   const envLines = [
     `OPENAI_API_KEY=${config.keys.openaiApiKey}`,
-    `GOOGLE_AI_KEY=${config.keys.googleAiKey}`,
+    `GOOGLE_AI_KEY=${config.keys.googleAiKey || ""}`,
     `CONVEX_URL=`,
     `CONVEX_AUTH_TOKEN=`,
-    `IG_USER_ID=${config.keys.igUserId}`,
-    `IG_ACCESS_TOKEN=${config.keys.igAccessToken}`,
+    `IG_USER_ID=${config.keys.igUserId || ""}`,
+    `IG_ACCESS_TOKEN=${config.keys.igAccessToken || ""}`,
   ];
   if (config.hasShopify) {
     envLines.push(`SHOPIFY_STORE=${config.keys.shopifyStore || ""}`);
