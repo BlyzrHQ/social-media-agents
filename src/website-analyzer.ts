@@ -5,6 +5,7 @@ export interface WebsiteAnalysis {
   description: string;
   contentTypes: string[];
   industry: string;
+  rawContent?: string;
 }
 
 const VALID_CONTENT_TYPES = [
@@ -89,5 +90,6 @@ export async function analyzeWebsite(
     parsed.contentTypes = ["product_photos", "tips"];
   }
 
+  parsed.rawContent = content;
   return parsed;
 }

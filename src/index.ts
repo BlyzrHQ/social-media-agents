@@ -75,7 +75,7 @@ async function main() {
   s1.start("Generating custom prompts for your brand with GPT-4o...");
   let prompts;
   try {
-    prompts = await generateCustomPrompts(brand, keys.openaiApiKey);
+    prompts = await generateCustomPrompts(brand, keys.openaiApiKey, websitePrefill?.rawContent);
 
     // Merge top post templates with generated ones (top posts take priority)
     if (topPostTemplates && topPostTemplates.length > 0) {

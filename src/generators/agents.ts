@@ -1,11 +1,13 @@
 import OpenAI from "openai";
 import type { BrandConfig, GeneratedPrompts, TemplateDefinition } from "../types.js";
 
-const GENERATION_PROMPT = `You are helping set up an automated social media content pipeline for a brand. Based on the brand info below, generate customized AI agent prompts.
+const GENERATION_PROMPT = `You are helping set up an automated social media content pipeline for a brand. Based on the brand info and website content below, generate HIGHLY SPECIFIC AI agent prompts that reflect this exact brand.
 
 BRAND NAME: {BRAND_NAME}
 BRAND DESCRIPTION: {BRAND_DESCRIPTION}
 CONTENT TYPES: {CONTENT_TYPES}
+
+{WEBSITE_SECTION}
 
 Generate a JSON response with EXACTLY this structure:
 {
@@ -36,19 +38,32 @@ Generate a JSON response with EXACTLY this structure:
   ]
 }
 
-Generate 3-4 templates that match the brand's content types. Make the prompts detailed and specific to the brand's niche. Use the brand name in prompts where appropriate.
+CRITICAL RULES FOR QUALITY:
+- Every prompt MUST mention the brand name and its specific products/services
+- System prompts must describe exactly what this brand sells, its tone, its audience
+- Templates must reflect the brand's actual visual style and content themes
+- Hashtags must include brand-specific tags, not just generic ones
+- Scoring criteria must be tailored to what matters for THIS brand, not generic marketing
+- If website content is provided, use specific product names, categories, and language from the site
+- Generate 3-4 templates that match the brand's actual content, not generic social media templates
 
 IMPORTANT: Return ONLY valid JSON, no markdown, no code fences.`;
 
 export async function generateCustomPrompts(
   brand: BrandConfig,
-  openaiApiKey: string
+  openaiApiKey: string,
+  websiteContent?: string
 ): Promise<GeneratedPrompts> {
   const client = new OpenAI({ apiKey: openaiApiKey });
 
+  const websiteSection = websiteContent
+    ? `WEBSITE CONTENT (use this to understand the brand deeply — extract product names, categories, tone, target audience, and style):\n\n${websiteContent.substring(0, 8000)}`
+    : "No website content available. Generate based on brand name and description only.";
+
   const prompt = GENERATION_PROMPT.replace("{BRAND_NAME}", brand.name)
     .replace("{BRAND_DESCRIPTION}", brand.description)
-    .replace("{CONTENT_TYPES}", brand.contentTypes.join(", "));
+    .replace("{CONTENT_TYPES}", brand.contentTypes.join(", "))
+    .replace("{WEBSITE_SECTION}", websiteSection);
 
   const res = await client.chat.completions.create({
     model: "gpt-4o",
