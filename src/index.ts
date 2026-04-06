@@ -7,7 +7,6 @@ import { collectBrandInfo, askForWebsite, analyzeWebsiteUrl, collectApiKeys, con
 import { generateCustomPrompts } from "./generators/agents.js";
 import { findTopPosts } from "./post-analyzer.js";
 import { scaffoldProject } from "./generators/project.js";
-import { generateConvexFiles } from "./generators/convex.js";
 import { generatePaperclipFiles } from "./generators/paperclip.js";
 import { setupPaperclip } from "./setup/paperclip.js";
 import type { ProjectConfig } from "./types.js";
@@ -113,18 +112,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Step 6: Generate Convex files
-  const s3 = p.spinner();
-  s3.start("Generating Convex database schema...");
-  try {
-    generateConvexFiles(config);
-    s3.stop("Convex schema generated!");
-  } catch (err) {
-    s3.stop("Failed to generate Convex files");
-    console.error(err);
-  }
-
-  // Step 7: Generate Paperclip files
+  // Step 6: Generate Paperclip files
   const s4 = p.spinner();
   s4.start("Generating Paperclip agent configurations...");
   try {
@@ -171,22 +159,29 @@ async function main() {
 
   // Done!
   const projectPath = path.resolve(brand.projectDir);
+  // Step 10: Seed templates into SQLite
+  const s7 = p.spinner();
+  s7.start("Seeding templates into database...");
+  try {
+    execSync("npx tsx src/seed.ts", {
+      cwd: path.resolve(brand.projectDir),
+      stdio: "pipe",
+      timeout: 30_000,
+    });
+    s7.stop(`Seeded ${config.prompts.initialTemplates.length} templates!`);
+  } catch {
+    s7.stop("Template seeding skipped — run 'npx tsx src/seed.ts' manually.");
+  }
+
   p.note(
-    `${pc.green("Your project is ready!")} Here's what to do next:\n\n` +
-      `${pc.cyan("1.")} Set up Convex:\n` +
-      `   cd ${brand.projectDir} && npx convex login && npx convex deploy\n\n` +
-      `${pc.cyan("2.")} Update .env with your Convex URL and auth token\n\n` +
-      `${pc.cyan("3.")} Seed initial templates:\n` +
-      `   npx convex run seed:seedTemplates\n\n` +
-      `${pc.cyan("4.")} Run the pipeline:\n` +
-      `   npx tsx src/cli.ts run pipeline\n\n` +
-      `${pc.cyan("5.")} Check pipeline health:\n` +
+    `${pc.green("Your project is ready!")} Here's what to do:\n\n` +
+      `${pc.cyan("1.")} Run the pipeline:\n` +
+      `   cd ${brand.projectDir} && npx tsx src/cli.ts run pipeline\n\n` +
+      `${pc.cyan("2.")} Check pipeline health:\n` +
       `   npx tsx src/cli.ts status\n\n` +
-      `${pc.cyan("6.")} Set up Trigger.dev (for cloud execution):\n` +
-      `   npx trigger.dev@latest init\n` +
-      `   npx trigger.dev@latest dev\n\n` +
-      `${pc.cyan("7.")} Paperclip dashboard:\n` +
+      `${pc.cyan("3.")} Paperclip dashboard:\n` +
       `   http://localhost:3100\n\n` +
+      `Database: ${brand.projectDir}/data/pipeline.db (SQLite)\n` +
       `Project: ${projectPath}`,
     "Next Steps"
   );

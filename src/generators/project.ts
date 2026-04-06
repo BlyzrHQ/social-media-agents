@@ -48,13 +48,13 @@ export function scaffoldProject(config: ProjectConfig): void {
           test: "vitest run",
         },
         dependencies: {
+          "better-sqlite3": "^11.7.0",
           commander: "^13.1.0",
           dotenv: "^16.4.7",
           openai: "^4.85.0",
-          "@trigger.dev/sdk": "4.4.3",
         },
         devDependencies: {
-          "@trigger.dev/build": "4.4.3",
+          "@types/better-sqlite3": "^7.6.0",
           "@types/node": "^22.13.0",
           tsx: "^4.19.0",
           typescript: "^5.7.0",
@@ -96,8 +96,7 @@ export function scaffoldProject(config: ProjectConfig): void {
   const envLines = [
     `OPENAI_API_KEY=${config.keys.openaiApiKey}`,
     `GOOGLE_AI_KEY=${config.keys.googleAiKey || ""}`,
-    `CONVEX_URL=`,
-    `CONVEX_AUTH_TOKEN=`,
+    `DB_PATH=./data/pipeline.db`,
     `IG_USER_ID=${config.keys.igUserId || ""}`,
     `IG_ACCESS_TOKEN=${config.keys.igAccessToken || ""}`,
   ];
@@ -117,7 +116,7 @@ export function scaffoldProject(config: ProjectConfig): void {
   // .gitignore
   fs.writeFileSync(
     path.join(dir, ".gitignore"),
-    "node_modules/\ndist/\n.env\n*.log\n.trigger\n"
+    "node_modules/\ndist/\n.env\n*.log\n.trigger\ndata/\n"
   );
 
   // Core runtime files
@@ -127,13 +126,25 @@ export function scaffoldProject(config: ProjectConfig): void {
 
   // Service files
   const services = generateServices();
-  fs.writeFileSync(path.join(dir, "src/services/convex.ts"), services.convex);
+  fs.writeFileSync(path.join(dir, "src/services/convex.ts"), services.database);
   fs.writeFileSync(path.join(dir, "src/services/embeddings.ts"), services.embeddings);
   fs.writeFileSync(path.join(dir, "src/services/image.ts"), services.image);
   fs.writeFileSync(path.join(dir, "src/services/instagram.ts"), services.instagram);
   if (config.hasShopify) {
     fs.writeFileSync(path.join(dir, "src/services/shopify.ts"), services.shopify);
   }
+
+  // Create data directory and seed templates
+  fs.mkdirSync(path.join(dir, "data"), { recursive: true });
+
+  // Write a seed script
+  const seedContent = [
+    'import { seedTemplates } from "./services/convex.js";',
+    `const templates = ${JSON.stringify(config.prompts.initialTemplates, null, 2)};`,
+    'seedTemplates(templates);',
+    'console.log("Seeded " + templates.length + " templates.");',
+  ].join("\n");
+  fs.writeFileSync(path.join(dir, "src/seed.ts"), seedContent);
 
   // Agent files
   fs.writeFileSync(
