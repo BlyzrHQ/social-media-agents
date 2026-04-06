@@ -111,24 +111,26 @@ export function setupPaperclip(config: ProjectConfig): void {
 
   // Insert agents directly into PostgreSQL
   try {
-    const insertSql = `
-      INSERT INTO agent (id, company_id, name, role, reports_to, adapter_type, adapter_config, status, created_at, updated_at)
-      VALUES
-        ('${cmoId}', '${companyId}', 'CMO', 'cmo', '${ceoAgentId}', 'claude_local', '{"dangerouslySkipPermissions":true}', 'idle', NOW(), NOW()),
-        ('${tdId}', '${companyId}', 'Template Designer', 'designer', '${cmoId}', 'claude_local', '{"dangerouslySkipPermissions":true}', 'idle', NOW(), NOW())
-      ON CONFLICT DO NOTHING;
-    `.replace(/\n/g, " ").replace(/\s+/g, " ");
+    // Use parameterized query via Paperclip's pg module
+    const script = `
+      const {execSync} = require('child_process');
+      const crypto = require('crypto');
+      const pgPath = execSync('find /app -path "*/pg/lib/index.js" -type f 2>/dev/null').toString().trim().split('\\n')[0];
+      if (!pgPath) { console.log('pg module not found'); process.exit(1); }
+      const pg = require(pgPath);
+      const pool = new pg.Pool({host:'localhost',port:54329,user:'paperclip',password:'paperclip',database:'paperclip'});
+      const cmoId = '${cmoId}';
+      const tdId = '${tdId}';
+      pool.query(
+        'INSERT INTO agents (id, company_id, name, role, reports_to, adapter_type, adapter_config, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW()), ($9,$2,$10,$11,$12,$6,$7,$8,NOW(),NOW())',
+        [cmoId, '${companyId}', 'CMO', 'cmo', '${ceoAgentId}', 'claude_local', JSON.stringify({dangerouslySkipPermissions:true}), 'idle', tdId, 'Template Designer', 'designer', cmoId]
+      ).then(() => {
+        console.log('Agents inserted');
+        return pool.end();
+      }).catch(e => { console.log('DB error:', e.message); pool.end(); });
+    `.replace(/\n/g, ' ');
 
-    dockerExec(paperclipDir,
-      `node -e "
-        const pg = require('/app/node_modules/pg/lib/index.js');
-        const pool = new pg.Pool({host:'localhost',port:54329,user:'paperclip',password:'paperclip',database:'paperclip'});
-        pool.query(\\"${insertSql.replace(/"/g, '\\"')}\\").then(() => {
-          console.log('Agents inserted');
-          return pool.end();
-        }).catch(e => { console.log('DB error:', e.message); pool.end(); });
-      "`,
-      { timeout: 15_000, encoding: "utf8" });
+    dockerExec(paperclipDir, `node -e "${script.replace(/"/g, '\\"')}"`, { timeout: 15_000, encoding: "utf8" });
     console.log("  CMO and Template Designer created in database.");
   } catch (err) {
     console.log("  DB insert failed:", err instanceof Error ? err.message : String(err));
