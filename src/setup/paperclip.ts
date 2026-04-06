@@ -83,6 +83,9 @@ export function setupPaperclip(config: ProjectConfig): void {
   }
   console.log("Paperclip is running.");
 
+  // Fix data directory permissions before onboard
+  try { dockerExecRoot("chown -R node:node /paperclip"); } catch { /* non-critical */ }
+
   // Onboard
   console.log("Running onboard...");
   try {
@@ -227,13 +230,25 @@ pool.query(
     console.log("  Could not write instructions:", err instanceof Error ? err.message : String(err));
   }
 
-  // Fix permissions
-  try { dockerExecRoot(`chown -R node:node ${agentBase}`); } catch { /* non-critical */ }
+  // Fix permissions on ALL paperclip data (not just agents)
+  try { dockerExecRoot("chown -R node:node /paperclip"); } catch { /* non-critical */ }
 
   // Restart to pick up new agents
+  console.log("Restarting Paperclip...");
   try {
     execSync("docker compose restart", { cwd: paperclipDir, stdio: "pipe", timeout: 60_000 });
-    waitMs(5000);
+    waitMs(8000);
+
+    // Wait for health after restart
+    for (let i = 0; i < 30; i++) {
+      try {
+        dockerExec(
+          'node -e "const h=require(\'http\');h.get(\'http://localhost:3100/api/health\',r=>{r.on(\'data\',()=>{});r.on(\'end\',()=>process.exit(r.statusCode===200?0:1))}).on(\'error\',()=>process.exit(1))"',
+          { timeout: 5_000, encoding: "utf8" }
+        );
+        break;
+      } catch { waitMs(2000); }
+    }
   } catch { /* non-critical */ }
 
   console.log("\nPaperclip is ready!");
