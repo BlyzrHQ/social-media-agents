@@ -1,7 +1,6 @@
 import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import * as crypto from "crypto";
 import type { ProjectConfig } from "../types.js";
 
 const CONTAINER = "paperclip-paperclip-1";
@@ -163,69 +162,35 @@ export function setupPaperclip(config: ProjectConfig): string {
     return "";
   }
 
-  // Create CMO and Template Designer in PostgreSQL
-  console.log("Creating CMO and Template Designer agents...");
-  const cmoId = crypto.randomUUID();
-  const tdId = crypto.randomUUID();
-
-  try {
-    // Write a temp script file instead of inline — avoids shell escaping issues
-    const scriptContent = `
-const {execSync} = require('child_process');
-const crypto = require('crypto');
-const pgPath = execSync('find /app -path "*/pg/lib/index.js" -type f 2>/dev/null').toString().trim().split('\\n')[0];
-if (!pgPath) { console.log('pg not found'); process.exit(1); }
-const pg = require(pgPath);
-const pool = new pg.Pool({host:'localhost',port:54329,user:'paperclip',password:'paperclip',database:'paperclip'});
-pool.query(
-  'INSERT INTO agents (id, company_id, name, role, reports_to, adapter_type, adapter_config, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW()), ($9,$2,$10,$11,$12,$6,$7,$8,NOW(),NOW())',
-  ['${cmoId}', '${companyId}', 'CMO', 'cmo', '${ceoAgentId}', 'claude_local', JSON.stringify({dangerouslySkipPermissions:true}), 'idle', '${tdId}', 'Template Designer', 'designer', '${cmoId}']
-).then(() => { console.log('OK'); return pool.end(); }).catch(e => { console.log('ERR:' + e.message); pool.end(); });
-`.trim();
-
-    // Write script to container
-    const b64 = Buffer.from(scriptContent).toString("base64");
-    dockerExec(
-      `node -e "require('fs').writeFileSync('/tmp/create-agents.js', Buffer.from('${b64}','base64').toString())"`,
-      { timeout: 5_000, encoding: "utf8" }
-    );
-
-    // Run it
-    const result = dockerExec("node /tmp/create-agents.js", { timeout: 15_000, encoding: "utf8" });
-    if (result.includes("OK")) {
-      console.log("  CMO and Template Designer created.");
-    } else {
-      console.log("  Agent creation issue:", result.trim());
-    }
-  } catch (err) {
-    console.log("  DB insert failed:", err instanceof Error ? err.message : String(err));
-    console.log("  Create CMO and Template Designer manually in the dashboard.");
-  }
-
-  // Write instruction files
-  console.log("Writing agent instructions...");
+  // Write CEO instructions + shared instructions for agents CEO will hire
+  console.log("Configuring CEO agent...");
   const agentBase = `/paperclip/instances/default/companies/${companyId}/agents`;
 
   try {
     const ceoAgentsMd = fs.readFileSync(path.join(paperclipDir, "ceo-AGENTS.md"), "utf8");
+    const triggerMd = fs.readFileSync(path.join(paperclipDir, "TRIGGER.md"), "utf8");
     const cmoAgentsMd = fs.readFileSync(path.join(paperclipDir, "cmo-AGENTS.md"), "utf8");
     const tdAgentsMd = fs.readFileSync(path.join(paperclipDir, "template-designer-AGENTS.md"), "utf8");
-    const triggerMd = fs.readFileSync(path.join(paperclipDir, "TRIGGER.md"), "utf8");
 
-    const writeFile = (agentId: string, filename: string, content: string) => {
+    const writeFile = (dir: string, filename: string, content: string) => {
       const b64 = Buffer.from(content).toString("base64");
       dockerExec(
-        `node -e "const fs=require('fs');const dir='${agentBase}/${agentId}/instructions';fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(dir+'/${filename}',Buffer.from('${b64}','base64').toString())"`,
+        `node -e "const fs=require('fs');fs.mkdirSync('${dir}',{recursive:true});fs.writeFileSync('${dir}/${filename}',Buffer.from('${b64}','base64').toString())"`,
         { timeout: 10_000, encoding: "utf8" }
       );
     };
 
-    writeFile(ceoAgentId, "AGENTS.md", ceoAgentsMd);
-    writeFile(cmoId, "AGENTS.md", cmoAgentsMd);
-    writeFile(cmoId, "TRIGGER.md", triggerMd);
-    writeFile(tdId, "AGENTS.md", tdAgentsMd);
-    writeFile(tdId, "TRIGGER.md", triggerMd);
-    console.log("  Instructions configured.");
+    // CEO instructions
+    writeFile(`${agentBase}/${ceoAgentId}/instructions`, "AGENTS.md", ceoAgentsMd);
+    writeFile(`${agentBase}/${ceoAgentId}/instructions`, "TRIGGER.md", triggerMd);
+
+    // Shared instructions for agents the CEO will create
+    const sharedDir = `/paperclip/instances/default/companies/${companyId}/shared-instructions`;
+    writeFile(sharedDir, "cmo-AGENTS.md", cmoAgentsMd);
+    writeFile(sharedDir, "template-designer-AGENTS.md", tdAgentsMd);
+    writeFile(sharedDir, "TRIGGER.md", triggerMd);
+
+    console.log("  CEO configured. Will hire CMO + Template Designer on first heartbeat.");
   } catch (err) {
     console.log("  Could not write instructions:", err instanceof Error ? err.message : String(err));
   }

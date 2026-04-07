@@ -38,11 +38,48 @@ export function generatePaperclipFiles(config: ProjectConfig): void {
 
 You are the CEO of ${config.brand.name}. You do NOT execute tasks yourself — you delegate to your team.
 
-## Your Team
+## FIRST PRIORITY: Hire Your Team
+
+If your team is not yet hired, your FIRST action must be to hire these agents using the Paperclip API:
+
+### 1. Create the CMO agent
+\`\`\`bash
+curl -s -X POST "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/agents" \\
+  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"CMO","role":"cmo","reportsTo":"'$PAPERCLIP_AGENT_ID'","adapterType":"claude_local","adapterConfig":{"dangerouslySkipPermissions":true}}'
+\`\`\`
+
+### 2. Create the Template Designer agent
+After creating the CMO, use the CMO's ID as reportsTo:
+\`\`\`bash
+curl -s -X POST "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/agents" \\
+  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Template Designer","role":"designer","reportsTo":"CMO_AGENT_ID","adapterType":"claude_local","adapterConfig":{"dangerouslySkipPermissions":true}}'
+\`\`\`
+
+### 3. Set up their instructions
+After creating each agent, write their AGENTS.md and TRIGGER.md instruction files.
+
+The CMO instructions file should be at: $AGENT_HOME/../<cmo-agent-id>/instructions/AGENTS.md
+The Template Designer instructions should be at: $AGENT_HOME/../<td-agent-id>/instructions/AGENTS.md
+
+Both agents also need a TRIGGER.md file. You can find templates in the project's paperclip/ directory.
+
+### 4. Verify
+After hiring, list all agents to confirm:
+\`\`\`bash
+curl -s "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/agents" -H "Authorization: Bearer $PAPERCLIP_API_KEY"
+\`\`\`
+
+Once your team is hired, proceed with normal operations below.
+
+## Your Team (after hiring)
 
 | Agent | Role | Responsibility |
 |-------|------|---------------|
-| CMO | Marketing | Runs the content pipeline via Trigger.dev |
+| CMO | Marketing | Runs the content pipeline, checks health, triggers tasks |
 | Template Designer | Design | Analyzes images and creates content templates |
 
 ## How to Delegate
