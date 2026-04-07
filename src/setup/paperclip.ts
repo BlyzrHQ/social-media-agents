@@ -28,7 +28,7 @@ function waitMs(ms: number) {
   }
 }
 
-export function setupPaperclip(config: ProjectConfig): void {
+export function setupPaperclip(config: ProjectConfig): string {
   const paperclipDir = path.resolve(config.brand.projectDir, "paperclip");
 
   // Check Docker
@@ -46,7 +46,7 @@ export function setupPaperclip(config: ProjectConfig): void {
   } catch {
     console.log("Failed to start Paperclip.");
     console.log(`  cd ${paperclipDir} && docker compose up -d`);
-    return;
+    return "";
   }
 
   // Wait for container to be running
@@ -57,7 +57,7 @@ export function setupPaperclip(config: ProjectConfig): void {
     execSync(`docker inspect ${CONTAINER}`, { stdio: "pipe" });
   } catch {
     console.log("Container not found. Check docker compose output.");
-    return;
+    return "";
   }
 
   // Wait for Paperclip HTTP to be ready (up to 120 seconds)
@@ -79,7 +79,7 @@ export function setupPaperclip(config: ProjectConfig): void {
 
   if (!ready) {
     console.log("Paperclip is still starting. Visit http://localhost:3100 when ready.");
-    return;
+    return "";
   }
   console.log("Paperclip is running.");
 
@@ -103,11 +103,11 @@ export function setupPaperclip(config: ProjectConfig): void {
         console.log("Onboard completed (config exists).");
       } else {
         console.log("Onboard failed:", msg);
-        return;
+        return "";
       }
     } catch {
       console.log("Onboard failed:", msg);
-      return;
+      return "";
     }
   }
 
@@ -155,12 +155,12 @@ export function setupPaperclip(config: ProjectConfig): void {
     ).trim();
   } catch {
     console.log("Could not find company/CEO. Create agents manually.");
-    return;
+    return "";
   }
 
   if (!companyId || !ceoAgentId) {
     console.log("No company found. Create agents manually.");
-    return;
+    return "";
   }
 
   // Create CMO and Template Designer in PostgreSQL
@@ -254,4 +254,5 @@ pool.query(
   console.log("\nPaperclip is ready!");
   console.log("  Dashboard: http://localhost:3100");
   if (inviteUrl) console.log(`  Login: ${inviteUrl}`);
+  return inviteUrl;
 }

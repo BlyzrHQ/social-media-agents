@@ -126,7 +126,7 @@ You are the Template Designer for ${config.brand.name}. You analyze reference im
 
 ## How You Work
 
-Trigger the template-generator task on Trigger.dev, passing an image URL. Read TRIGGER.md for the command.
+Read TRIGGER.md for available commands. To analyze an image and create a template, the pipeline needs a template-generator agent which you can run via the CLI or Trigger.dev.
 
 ## When You Receive a Task
 
@@ -148,41 +148,69 @@ Template Created:
   // TRIGGER.md (shared by CMO and Template Designer)
   fs.writeFileSync(
     path.join(dir, "TRIGGER.md"),
-    `# Trigger.dev Pipeline
+    `# ${config.brand.name} Marketing Pipeline
 
-## Environment
-- TRIGGER_SECRET_KEY is in your environment — use $TRIGGER_SECRET_KEY in curl commands
+## How to Run Tasks
 
-## Trigger a Task
+The project directory is the working directory. Run tasks using the CLI:
 
 \`\`\`bash
-curl -s -X POST "https://api.trigger.dev/api/v1/tasks/TASK_ID_HERE/trigger" \\
+# Run the full pipeline (ideas → rating → content → posting)
+npx tsx src/cli.ts run pipeline
+
+# Run individual agents
+npx tsx src/cli.ts run ideas
+npx tsx src/cli.ts run rating
+npx tsx src/cli.ts run content
+npx tsx src/cli.ts run posting
+
+# Check pipeline health
+npx tsx src/cli.ts status
+\`\`\`
+
+## Available Commands
+
+| Command | What it does | Duration |
+|---------|-------------|----------|
+| run pipeline | Runs all 4 agents sequentially | ~6-8 min |
+| run ideas | Generates 10 content ideas using GPT-4o | ~30s |
+| run rating | Scores and approves/rejects pending ideas | ~20s |
+| run content | Generates images + captions for approved ideas | ~5 min |
+| run posting | Posts next queued content to Instagram | ~15s |
+| status | Shows pending ideas, approved, queued counts | instant |
+
+## Decision Rules (check status first)
+
+| Condition | Action |
+|-----------|--------|
+| Pending ideas (new) > 20 | Skip ideas, run rating |
+| Pending ideas (new) < 5 | Run ideas to generate more |
+| Approved unprocessed > 10 | Run content builder |
+| Approved unprocessed = 0 | Skip content builder |
+| Queued content > 10 | Skip content, run posting |
+| Queued content = 0 + approved exist | Run content builder |
+| Everything balanced | Report status, no action |
+
+## Cloud Execution (optional — Trigger.dev)
+
+If Trigger.dev is set up, you can trigger tasks via API instead:
+
+\`\`\`bash
+curl -s -X POST "https://api.trigger.dev/api/v1/tasks/TASK_ID/trigger" \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer $TRIGGER_SECRET_KEY" \\
   -d '{"payload":{}}'
 \`\`\`
 
-## Available Tasks
-
-| Task ID | What it does |
-|---------|-------------|
-| pipeline | Runs all agents sequentially |
-| ideas | Generates content ideas |
-| rating | Scores and approves/rejects ideas |
-| content-builder | Generates images and captions |
-| posting | Posts to Instagram |
-| template-generator | Analyzes image, creates template (pass {"payload":{"imageUrl":"URL"}}) |
-
-## Check Run Status
-
-\`\`\`bash
-curl -s "https://api.trigger.dev/api/v3/runs/RUN_ID" \\
-  -H "Authorization: Bearer $TRIGGER_SECRET_KEY"
-\`\`\`
+Task IDs: pipeline, ideas, rating, content-builder, posting, template-generator
 
 ## Reporting
 
-Always report: pipeline health numbers, decision made, run ID, final status, recommendations.
+After any action, ALWAYS report:
+1. Pipeline health numbers (pending ideas, approved, queued)
+2. What decision you made and why
+3. Result (success/failure)
+4. Recommendations for next run
 `
   );
 }

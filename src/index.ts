@@ -139,13 +139,14 @@ async function main() {
   }
 
   // Step 9: Set up Paperclip (automatic — no prompt)
+  let paperclipInvite = "";
   const s6 = p.spinner();
   s6.start("Setting up Paperclip agent orchestration...");
   try {
     // Check Docker first
     execSync("docker --version", { stdio: "pipe" });
     execSync("docker ps", { stdio: "pipe" });
-    setupPaperclip(config);
+    paperclipInvite = setupPaperclip(config);
     s6.stop("Paperclip is running with CEO, CMO, and Template Designer agents!");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -176,7 +177,8 @@ async function main() {
       `${pc.cyan("5.")} Run the pipeline:\n` +
       `   npx tsx src/cli.ts run pipeline\n\n` +
       `${pc.cyan("6.")} Paperclip dashboard:\n` +
-      `   http://localhost:3100\n\n` +
+      `   http://localhost:3100\n` +
+      (paperclipInvite ? `   Login: ${paperclipInvite}\n\n` : "\n") +
       `Project: ${projectPath}`,
     "Next Steps"
   );
