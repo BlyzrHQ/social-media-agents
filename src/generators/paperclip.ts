@@ -113,9 +113,18 @@ You are the Chief Marketing Officer for ${config.brand.name}. ${config.brand.des
 
 You own the marketing content pipeline end-to-end.
 
+## Prerequisites
+
+Before running the pipeline, ensure these are set up:
+1. **Convex** — database must be deployed. Check: the project's .env has CONVEX_URL and CONVEX_AUTH_TOKEN
+2. **API keys** — OPENAI_API_KEY must be in .env (GOOGLE_AI_KEY and IG creds are optional)
+3. **Templates** — must be seeded: npx convex run seed:seedTemplates
+
+If any of these are missing, report to the CEO that setup is incomplete.
+
 ## How You Work
 
-You operate an automated pipeline on Trigger.dev by calling its REST API. Read TRIGGER.md for the exact commands.
+Read TRIGGER.md for the exact commands to run the pipeline.
 
 ## Daily Routine
 
@@ -186,6 +195,45 @@ Template Created:
   fs.writeFileSync(
     path.join(dir, "TRIGGER.md"),
     `# ${config.brand.name} Marketing Pipeline
+
+## Required Setup
+
+Before running any tasks, the project needs these services configured:
+
+### 1. Convex (Database)
+The pipeline stores ideas, content queue, templates, and posted content in Convex.
+
+Setup:
+\`\`\`bash
+cd PROJECT_DIR
+npx convex login
+npx convex deploy
+\`\`\`
+Then add to .env:
+- CONVEX_URL — from the deploy output
+- CONVEX_AUTH_TOKEN — from the deploy output
+
+Seed templates:
+\`\`\`bash
+npx convex run seed:seedTemplates
+\`\`\`
+
+### 2. Trigger.dev (Cloud Execution — optional)
+For running tasks in the cloud with retries and monitoring.
+
+Setup:
+\`\`\`bash
+cd PROJECT_DIR
+npx trigger.dev@latest init
+npx trigger.dev@latest dev
+\`\`\`
+Then add to .env:
+- TRIGGER_SECRET_KEY — from your Trigger.dev project dashboard
+
+### 3. Required API Keys (in .env)
+- OPENAI_API_KEY — for GPT-4o content generation and rating
+- GOOGLE_AI_KEY — for Gemini image generation (optional)
+- IG_USER_ID + IG_ACCESS_TOKEN — for Instagram posting (optional)
 
 ## How to Run Tasks
 
