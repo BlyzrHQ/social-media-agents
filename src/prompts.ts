@@ -141,12 +141,6 @@ export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean 
               ? undefined
               : "Leave empty or enter a key starting with AIza",
         }),
-      serperApiKey: () =>
-        p.text({
-          message: "Serper API Key (for discovering top posts — free at serper.dev)",
-          placeholder: "optional — leave empty to skip",
-          validate: () => undefined,
-        }),
       hasInstagram: () =>
         p.confirm({
           message: "Do you want to connect Instagram for posting?",
@@ -237,7 +231,6 @@ export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean 
   return {
     openaiApiKey: keys.openaiApiKey as string,
     googleAiKey: keys.googleAiKey as string,
-    serperApiKey: (keys.serperApiKey as string) || undefined,
     igUserId,
     igAccessToken,
     shopifyStore,

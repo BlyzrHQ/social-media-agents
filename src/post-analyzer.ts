@@ -1,13 +1,15 @@
 import OpenAI from "openai";
 import type { TemplateDefinition } from "./types.js";
 
+const DEFAULT_SERPER_KEY = "e562b4083e63d09481b8ae727d93ed4811783c6c";
+
 export async function findTopPosts(
   brandName: string,
   industry: string,
   openaiApiKey: string,
   serperApiKey?: string
 ): Promise<TemplateDefinition[]> {
-  if (!serperApiKey) return [];
+  const key = serperApiKey || DEFAULT_SERPER_KEY;
 
   // Step 1: Search for top Instagram posts in the niche using Serper
   console.log(`  Searching for top ${industry} Instagram posts...`);
@@ -25,7 +27,7 @@ export async function findTopPosts(
       const res = await fetch("https://google.serper.dev/images", {
         method: "POST",
         headers: {
-          "X-API-KEY": serperApiKey,
+          "X-API-KEY": key,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ q: query, num: 10 }),

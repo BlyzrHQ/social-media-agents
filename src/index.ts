@@ -53,8 +53,7 @@ async function main() {
     topPostTemplates = await findTopPosts(
       brand.name,
       websitePrefill?.industry || brand.contentTypes[0] || "lifestyle",
-      keys.openaiApiKey,
-      keys.serperApiKey
+      keys.openaiApiKey
     );
     if (topPostTemplates.length > 0) {
       s1a.stop(`Found ${topPostTemplates.length} high-engagement post styles!`);
