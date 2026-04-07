@@ -176,6 +176,51 @@ program.command("status").description("Check pipeline health").action(async () =
   process.exit(0);
 });
 
+program.command("config").description("Add or update API keys").action(async () => {
+  const fs = await import("fs");
+  const path = await import("path");
+  const readline = await import("readline");
+
+  const envPath = path.join(process.cwd(), ".env");
+  let envContent = "";
+  try { envContent = fs.readFileSync(envPath, "utf8"); } catch { /* new file */ }
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q: string): Promise<string> => new Promise(r => rl.question(q, r));
+
+  const keys = [
+    { key: "OPENAI_API_KEY", label: "OpenAI API Key", required: true },
+    { key: "GOOGLE_AI_KEY", label: "Google AI Key (Gemini)", required: false },
+    { key: "CONVEX_URL", label: "Convex URL", required: true },
+    { key: "CONVEX_AUTH_TOKEN", label: "Convex Auth Token", required: true },
+    { key: "TRIGGER_SECRET_KEY", label: "Trigger.dev Secret Key", required: false },
+    { key: "IG_USER_ID", label: "Instagram User ID", required: false },
+    { key: "IG_ACCESS_TOKEN", label: "Instagram Access Token", required: false },
+    { key: "SHOPIFY_STORE", label: "Shopify Store Domain", required: false },
+    { key: "SHOPIFY_ACCESS_TOKEN", label: "Shopify Access Token", required: false },
+  ];
+
+  console.log("Configure API keys (press Enter to keep current value):\\n");
+
+  for (const { key, label, required: req } of keys) {
+    const current = envContent.match(new RegExp(\`\${key}=(.*)\`))?.[1] || "";
+    const hint = current ? \` [current: \${current.substring(0, 20)}...]\` : req ? " (required)" : " (optional)";
+    const value = await ask(\`\${label}\${hint}: \`);
+    if (value) {
+      if (envContent.includes(\`\${key}=\`)) {
+        envContent = envContent.replace(new RegExp(\`\${key}=.*\`), \`\${key}=\${value}\`);
+      } else {
+        envContent += \`\\n\${key}=\${value}\`;
+      }
+    }
+  }
+
+  fs.writeFileSync(envPath, envContent.trim() + "\\n");
+  console.log("\\n.env updated successfully!");
+  rl.close();
+  process.exit(0);
+});
+
 program.parse();
 `;
 }
