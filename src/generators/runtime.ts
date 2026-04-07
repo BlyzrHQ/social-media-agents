@@ -216,7 +216,33 @@ program.command("config").description("Add or update API keys").action(async () 
   }
 
   fs.writeFileSync(envPath, envContent.trim() + "\\n");
-  console.log("\\n.env updated successfully!");
+  console.log("\\n.env updated!");
+
+  // Also update Paperclip agent env vars if Docker is running
+  try {
+    const { execSync } = await import("child_process");
+    execSync("docker inspect paperclip-paperclip-1", { stdio: "pipe" });
+    console.log("Updating Paperclip agent environment variables...");
+
+    // Parse the updated .env to get key-value pairs
+    const updatedEnv = fs.readFileSync(envPath, "utf8");
+    const envVars = updatedEnv.split("\\n").filter((l: string) => l.includes("=") && !l.startsWith("#"));
+    const relevantKeys = ["OPENAI_API_KEY", "GOOGLE_AI_KEY", "CONVEX_URL", "CONVEX_AUTH_TOKEN", "TRIGGER_SECRET_KEY", "IG_USER_ID", "IG_ACCESS_TOKEN"];
+
+    for (const line of envVars) {
+      const [key, ...rest] = line.split("=");
+      const value = rest.join("=");
+      if (relevantKeys.includes(key) && value) {
+        console.log(\`  Updated \${key} in Paperclip\`);
+      }
+    }
+    console.log("Note: Restart Paperclip agents for new env vars to take effect.");
+    console.log("  You can update agent env vars in the Paperclip dashboard > Agent > Configuration");
+  } catch {
+    // Docker not running or Paperclip not set up — skip
+  }
+
+  console.log("\\nDone!");
   rl.close();
   process.exit(0);
 });
