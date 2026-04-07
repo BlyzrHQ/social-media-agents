@@ -14,8 +14,9 @@ export async function findTopPosts(
   // Step 1: Search for top Instagram posts in the niche using Serper
   console.log(`  Searching for top ${industry} Instagram posts...`);
   const queries = [
-    `site:instagram.com top ${industry} posts high engagement`,
-    `site:instagram.com best ${industry} content ${new Date().getFullYear()}`,
+    `best ${industry} instagram posts high engagement`,
+    `top ${industry} food photography social media`,
+    `${industry} content ideas inspiration instagram ${new Date().getFullYear()}`,
   ];
 
   const imageUrls: string[] = [];
@@ -40,16 +41,10 @@ export async function findTopPosts(
       if (data.images) {
         for (const img of data.images) {
           if (
-            imageUrls.length < 5 &&
+            imageUrls.length < 8 &&
             img.imageUrl &&
             !imageUrls.includes(img.imageUrl) &&
-            (img.imageUrl.endsWith(".jpg") ||
-              img.imageUrl.endsWith(".jpeg") ||
-              img.imageUrl.endsWith(".png") ||
-              img.imageUrl.endsWith(".webp") ||
-              img.imageUrl.includes("instagram") ||
-              img.imageUrl.includes("cdninstagram") ||
-              img.imageUrl.includes("scontent"))
+            img.imageUrl.startsWith("http")
           ) {
             imageUrls.push(img.imageUrl);
           }
@@ -112,12 +107,25 @@ export async function findTopPosts(
 
   for (let i = 0; i < Math.min(imageUrlsToUse.length, 3); i++) {
     try {
-      // Download image and convert to base64 data URI (avoids CDN access issues)
-      const imgRes = await fetch(imageUrlsToUse[i], { signal: AbortSignal.timeout(10_000) });
+      // Download image and convert to base64 data URI
+      const imgRes = await fetch(imageUrlsToUse[i], {
+        signal: AbortSignal.timeout(10_000),
+        headers: { "Accept": "image/jpeg,image/png,image/webp,image/*" },
+      });
       if (!imgRes.ok) { console.log(`  Image ${i + 1}: download failed (${imgRes.status})`); continue; }
+      const contentType = imgRes.headers.get("content-type") || "";
+      // Skip non-image responses (HTML pages, SVGs, etc.)
+      if (!contentType.startsWith("image/") || contentType.includes("svg")) {
+        console.log(`  Image ${i + 1}: not a valid image (${contentType})`);
+        continue;
+      }
       const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
-      const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-      const b64 = `data:${contentType};base64,${imgBuffer.toString("base64")}`;
+      // GPT-4o supports: image/jpeg, image/png, image/gif, image/webp
+      const mimeType = contentType.includes("png") ? "image/png"
+        : contentType.includes("webp") ? "image/webp"
+        : contentType.includes("gif") ? "image/gif"
+        : "image/jpeg";
+      const b64 = `data:${mimeType};base64,${imgBuffer.toString("base64")}`;
 
       const res = await client.chat.completions.create({
         model: "gpt-4o",
