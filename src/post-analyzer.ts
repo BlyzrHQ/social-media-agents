@@ -112,6 +112,13 @@ export async function findTopPosts(
 
   for (let i = 0; i < Math.min(imageUrlsToUse.length, 3); i++) {
     try {
+      // Download image and convert to base64 data URI (avoids CDN access issues)
+      const imgRes = await fetch(imageUrlsToUse[i], { signal: AbortSignal.timeout(10_000) });
+      if (!imgRes.ok) { console.log(`  Image ${i + 1}: download failed (${imgRes.status})`); continue; }
+      const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+      const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+      const b64 = `data:${contentType};base64,${imgBuffer.toString("base64")}`;
+
       const res = await client.chat.completions.create({
         model: "gpt-4o",
         messages: [
@@ -120,9 +127,9 @@ export async function findTopPosts(
             content: [
               {
                 type: "text",
-                text: `Analyze this top-performing Instagram post and create a reusable content template for the brand "${brandName}" in the ${industry} industry.
+                text: `Analyze this top-performing social media post and create a reusable content template for the brand "${brandName}" in the ${industry} industry.
 
-This is a high-engagement post from the ${industry} niche. Study what makes it visually effective — composition, colors, styling, mood — and create a template others can use to produce similar content.
+Study what makes it visually effective — composition, colors, styling, mood — and create a template others can use to produce similar content.
 
 Return ONLY valid JSON (no markdown, no code fences):
 {
@@ -141,7 +148,7 @@ Return ONLY valid JSON (no markdown, no code fences):
               },
               {
                 type: "image_url",
-                image_url: { url: imageUrlsToUse[i], detail: "high" },
+                image_url: { url: b64, detail: "high" },
               },
             ],
           },
@@ -158,7 +165,8 @@ Return ONLY valid JSON (no markdown, no code fences):
         templates.push(template);
         console.log(`  Template ${i + 1}: ${template.displayName}`);
       }
-    } catch {
+    } catch (err) {
+      console.log(`  Image ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`);
       continue;
     }
   }
