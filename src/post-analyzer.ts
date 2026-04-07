@@ -65,13 +65,52 @@ export async function findTopPosts(
     return [];
   }
 
-  console.log(`  Found ${imageUrls.length} candidate images. Analyzing with GPT-4o...`);
+  // Verify image URLs are accessible before sending to GPT-4o
+  const validUrls: string[] = [];
+  for (const url of imageUrls) {
+    try {
+      const check = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5_000) });
+      if (check.ok) validUrls.push(url);
+    } catch { /* skip inaccessible */ }
+  }
+
+  if (validUrls.length === 0) {
+    // Fallback: try broader search without site:instagram.com
+    try {
+      const fallbackRes = await fetch("https://google.serper.dev/images", {
+        method: "POST",
+        headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+        body: JSON.stringify({ q: `best ${industry} social media content photography`, num: 10 }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (fallbackRes.ok) {
+        const fallbackData = (await fallbackRes.json()) as { images?: { imageUrl: string }[] };
+        if (fallbackData.images) {
+          for (const img of fallbackData.images) {
+            if (validUrls.length >= 5) break;
+            try {
+              const check = await fetch(img.imageUrl, { method: "HEAD", signal: AbortSignal.timeout(5_000) });
+              if (check.ok) validUrls.push(img.imageUrl);
+            } catch { /* skip */ }
+          }
+        }
+      }
+    } catch { /* skip fallback */ }
+  }
+
+  if (validUrls.length === 0) {
+    console.log("  No accessible images found.");
+    return [];
+  }
+
+  console.log(`  Found ${validUrls.length} accessible images. Analyzing with GPT-4o...`);
+  const imageUrlsToUse = validUrls;
 
   // Step 2: Analyze top 3 images with GPT-4o vision and create templates
   const client = new OpenAI({ apiKey: openaiApiKey });
   const templates: TemplateDefinition[] = [];
 
-  for (let i = 0; i < Math.min(imageUrls.length, 3); i++) {
+  for (let i = 0; i < Math.min(imageUrlsToUse.length, 3); i++) {
     try {
       const res = await client.chat.completions.create({
         model: "gpt-4o",
@@ -102,7 +141,7 @@ Return ONLY valid JSON (no markdown, no code fences):
               },
               {
                 type: "image_url",
-                image_url: { url: imageUrls[i], detail: "high" },
+                image_url: { url: imageUrlsToUse[i], detail: "high" },
               },
             ],
           },
