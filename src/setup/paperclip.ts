@@ -195,8 +195,70 @@ export function setupPaperclip(config: ProjectConfig): string {
     console.log("  Could not write instructions:", err instanceof Error ? err.message : String(err));
   }
 
-  // Fix permissions on ALL paperclip data (not just agents)
+  // Fix permissions on ALL paperclip data
   try { dockerExecRoot("chown -R node:node /paperclip"); } catch { /* non-critical */ }
+
+  // Create CMO and Template Designer via PostgreSQL
+  console.log("Creating CMO and Template Designer agents...");
+  try {
+    const createScript = `
+const {execSync} = require('child_process');
+const crypto = require('crypto');
+const pgPath = execSync('find /app -path "*/pg/lib/index.js" -type f').toString().trim().split('\\n')[0];
+const pg = require(pgPath);
+const pool = new pg.Pool({host:'localhost',port:54329,user:'paperclip',password:'paperclip',database:'paperclip'});
+const cmoId = crypto.randomUUID();
+const tdId = crypto.randomUUID();
+pool.query(
+  'INSERT INTO agents (id, company_id, name, role, reports_to, adapter_type, adapter_config, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW()), ($9,$2,$10,$11,$12,$6,$7,$8,NOW(),NOW())',
+  [cmoId, '${companyId}', 'CMO', 'cmo', '${ceoAgentId}', 'claude_local', JSON.stringify({dangerouslySkipPermissions:true}), 'idle', tdId, 'Template Designer', 'designer', cmoId]
+).then(() => {
+  console.log('OK:' + cmoId + ':' + tdId);
+  return pool.end();
+}).catch(e => { console.log('ERR:' + e.message); pool.end(); });
+`.trim();
+
+    const scriptB64 = Buffer.from(createScript).toString("base64");
+    dockerExec(
+      `node -e "require('fs').writeFileSync('/tmp/create-agents.js',Buffer.from('${scriptB64}','base64').toString())"`,
+      { timeout: 5_000, encoding: "utf8" }
+    );
+    const result = dockerExec("node /tmp/create-agents.js", { timeout: 15_000, encoding: "utf8" });
+
+    if (result.includes("OK:")) {
+      const parts = result.trim().split("OK:")[1].split(":");
+      const cmoId = parts[0];
+      const tdId = parts[1];
+
+      // Write instruction files for the new agents
+      const writeFile = (dir: string, filename: string, content: string) => {
+        const b64 = Buffer.from(content).toString("base64");
+        dockerExec(
+          `node -e "const fs=require('fs');fs.mkdirSync('${dir}',{recursive:true});fs.writeFileSync('${dir}/${filename}',Buffer.from('${b64}','base64').toString())"`,
+          { timeout: 10_000, encoding: "utf8" }
+        );
+      };
+
+      const cmoAgentsMd = fs.readFileSync(path.join(paperclipDir, "cmo-AGENTS.md"), "utf8");
+      const tdAgentsMd = fs.readFileSync(path.join(paperclipDir, "template-designer-AGENTS.md"), "utf8");
+      const triggerMd = fs.readFileSync(path.join(paperclipDir, "TRIGGER.md"), "utf8");
+
+      writeFile(`${agentBase}/${cmoId}/instructions`, "AGENTS.md", cmoAgentsMd);
+      writeFile(`${agentBase}/${cmoId}/instructions`, "TRIGGER.md", triggerMd);
+      writeFile(`${agentBase}/${tdId}/instructions`, "AGENTS.md", tdAgentsMd);
+      writeFile(`${agentBase}/${tdId}/instructions`, "TRIGGER.md", triggerMd);
+
+      // Fix permissions again after creating new dirs
+      try { dockerExecRoot("chown -R node:node /paperclip"); } catch { /* */ }
+
+      console.log("  CMO and Template Designer created!");
+    } else {
+      console.log("  Agent creation issue:", result.trim());
+    }
+  } catch (err) {
+    console.log("  Could not create agents:", err instanceof Error ? err.message : String(err));
+    console.log("  Create them manually in the Paperclip dashboard.");
+  }
 
   // Restart to pick up new agents
   console.log("Restarting Paperclip...");

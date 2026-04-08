@@ -114,12 +114,14 @@ export async function collectBrandInfo(prefill?: WebsiteAnalysis | null): Promis
 
 export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean }> {
   p.note(
-    "API keys:\n" +
+    "API keys and service credentials:\n" +
       `${pc.cyan("OpenAI")} — GPT-4o for content generation and rating (required)\n` +
       `${pc.cyan("Google AI")} — (optional) Gemini 3 Pro for image generation\n` +
+      `${pc.cyan("Convex")} — (optional now) database — set up later with npm run convex:dev\n` +
+      `${pc.cyan("Trigger.dev")} — (optional now) cloud execution — set up later with npx trigger.dev init\n` +
       `${pc.cyan("Instagram")} — (optional) Graph API for posting\n` +
       `${pc.cyan("Shopify")} — (optional) for product-based content\n\n` +
-      `You can leave optional keys blank and add them to .env later.`,
+      `Leave optional fields blank and add them later with: npm run config`,
     "API Keys"
   );
 
@@ -134,12 +136,30 @@ export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean 
         }),
       googleAiKey: () =>
         p.text({
-          message: "Google AI Key (for Gemini — leave empty to skip image generation)",
+          message: "Google AI Key (for Gemini — leave empty to add later)",
           placeholder: "AIza... (optional)",
           validate: (v) =>
             v.length === 0 || v.startsWith("AIza")
               ? undefined
               : "Leave empty or enter a key starting with AIza",
+        }),
+      convexUrl: () =>
+        p.text({
+          message: "Convex URL (leave empty — npm run convex:dev sets this automatically)",
+          placeholder: "https://xxx.convex.cloud (optional)",
+          validate: () => undefined,
+        }),
+      convexAuthToken: () =>
+        p.text({
+          message: "Convex Auth Token (leave empty if not using auth)",
+          placeholder: "optional",
+          validate: () => undefined,
+        }),
+      triggerSecretKey: () =>
+        p.text({
+          message: "Trigger.dev Secret Key (leave empty — add after npx trigger.dev init)",
+          placeholder: "tr_dev_... or tr_prod_... (optional)",
+          validate: () => undefined,
         }),
       hasInstagram: () =>
         p.confirm({
@@ -230,7 +250,10 @@ export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean 
 
   return {
     openaiApiKey: keys.openaiApiKey as string,
-    googleAiKey: keys.googleAiKey as string,
+    googleAiKey: (keys.googleAiKey as string) || undefined,
+    convexUrl: (keys.convexUrl as string) || undefined,
+    convexAuthToken: (keys.convexAuthToken as string) || undefined,
+    triggerSecretKey: (keys.triggerSecretKey as string) || undefined,
     igUserId,
     igAccessToken,
     shopifyStore,

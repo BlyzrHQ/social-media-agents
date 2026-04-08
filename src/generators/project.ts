@@ -9,6 +9,10 @@ import {
   generateServices,
 } from "./runtime.js";
 import {
+  generateTriggerSync,
+  generatePaperclipTriggerSync,
+} from "./setup.js";
+import {
   generateIdeasAgent,
   generateRatingAgent,
   generateContentBuilderAgent,
@@ -25,6 +29,7 @@ export function scaffoldProject(config: ProjectConfig): void {
     "src",
     "src/agents",
     "src/services",
+    "src/setup",
     "src/trigger",
     "src/tests",
     ".github/workflows",
@@ -46,10 +51,16 @@ export function scaffoldProject(config: ProjectConfig): void {
           build: "tsc",
           start: "node dist/cli.js",
           dev: "tsx src/cli.ts",
+          config: "tsx src/cli.ts config",
+          "convex:dev": "convex dev",
+          "convex:seed": "convex run seed:seedTemplates",
+          "trigger:sync-env": "tsx src/setup/trigger-sync.ts dev",
+          "paperclip:sync-trigger": "tsx src/setup/paperclip-sync.ts dev",
           test: "vitest run",
         },
         dependencies: {
           commander: "^13.1.0",
+          convex: "^1.26.1",
           dotenv: "^16.4.7",
           openai: "^4.85.0",
           "@trigger.dev/sdk": "4.4.3",
@@ -97,8 +108,9 @@ export function scaffoldProject(config: ProjectConfig): void {
   const envLines = [
     `OPENAI_API_KEY=${config.keys.openaiApiKey}`,
     `GOOGLE_AI_KEY=${config.keys.googleAiKey || ""}`,
-    `CONVEX_URL=`,
-    `CONVEX_AUTH_TOKEN=`,
+    `CONVEX_URL=${config.keys.convexUrl || ""}`,
+    `CONVEX_AUTH_TOKEN=${config.keys.convexAuthToken || ""}`,
+    `TRIGGER_SECRET_KEY=${config.keys.triggerSecretKey || ""}`,
     `IG_USER_ID=${config.keys.igUserId || ""}`,
     `IG_ACCESS_TOKEN=${config.keys.igAccessToken || ""}`,
   ];
@@ -107,6 +119,7 @@ export function scaffoldProject(config: ProjectConfig): void {
     envLines.push(`SHOPIFY_ACCESS_TOKEN=${config.keys.shopifyAccessToken || ""}`);
   }
   fs.writeFileSync(path.join(dir, ".env"), envLines.join("\n") + "\n");
+  fs.writeFileSync(path.join(dir, ".env.local"), "");
 
   // .env.example
   const exampleLines = envLines.map((l) => {
@@ -118,13 +131,15 @@ export function scaffoldProject(config: ProjectConfig): void {
   // .gitignore
   fs.writeFileSync(
     path.join(dir, ".gitignore"),
-    "node_modules/\ndist/\n.env\n*.log\n.trigger\n"
+    "node_modules/\ndist/\n.env\n.env.local\n*.log\n.trigger\n"
   );
 
   // Core runtime files
   fs.writeFileSync(path.join(dir, "src/runner.ts"), generateRunner());
   fs.writeFileSync(path.join(dir, "src/config.ts"), generateConfig(config));
   fs.writeFileSync(path.join(dir, "src/cli.ts"), generateCli(config));
+  fs.writeFileSync(path.join(dir, "src/setup/trigger-sync.ts"), generateTriggerSync());
+  fs.writeFileSync(path.join(dir, "src/setup/paperclip-sync.ts"), generatePaperclipTriggerSync());
 
   // Service files
   const services = generateServices();
@@ -166,8 +181,9 @@ export function scaffoldProject(config: ProjectConfig): void {
     path.join(dir, "trigger.config.ts"),
     `import { defineConfig } from "@trigger.dev/sdk/v3";
 
+// Run 'npx trigger.dev@latest init' to replace the project ID below
 export default defineConfig({
-  project: "TRIGGER_PROJECT_ID",
+  project: "TRIGGER_PROJECT_ID", // replaced by 'npx trigger.dev@latest init'
   runtime: "node",
   logLevel: "log",
   maxDuration: 3600,

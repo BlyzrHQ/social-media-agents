@@ -168,12 +168,21 @@ async function main() {
   p.note(
     `${pc.green("Your project is ready!")} Here's what to do:\n\n` +
       `${pc.cyan("1.")} Set up Convex:\n` +
-      `   cd ${brand.projectDir} && npx convex login && npx convex deploy\n\n` +
-      `${pc.cyan("2.")} Update .env with your Convex URL and auth token\n\n` +
-      `${pc.cyan("3.")} Seed initial templates:\n` +
-      `   npx convex run seed:seedTemplates\n\n` +
-      `${pc.cyan("4.")} Set up Trigger.dev:\n` +
-      `   npx trigger.dev@latest init && npx trigger.dev@latest dev\n\n` +
+      `   cd ${brand.projectDir} && npm run convex:dev\n` +
+      `   Leave this terminal open — Convex keeps running and writes CONVEX_URL to .env.local automatically.\n` +
+      `   Then open a second terminal in the same project for the next steps.\n\n` +
+      `${pc.cyan("2.")} Seed initial templates (in terminal #2):\n` +
+      `   npm run convex:seed\n\n` +
+      `${pc.cyan("3.")} Set up Trigger.dev:\n` +
+      `   cd ${brand.projectDir}\n` +
+      `   npx trigger.dev@latest init\n` +
+      `   npx trigger.dev@latest dev\n` +
+      `   Then in that same terminal run npm run config and paste TRIGGER_SECRET_KEY if you have not already.\n` +
+      `   Then run npm run trigger:sync-env to push OPENAI / GOOGLE / CONVEX keys into Trigger.dev.\n` +
+      `   Then run npm run paperclip:sync-trigger to refresh Paperclip with the Trigger secret + task IDs.\n` +
+      `   Tip: run Trigger.dev in a third terminal if you want to keep Convex open too.\n\n` +
+      `${pc.cyan("4.")} Optional auth token:\n` +
+      `   If your Convex setup requires auth for queries/mutations, add CONVEX_AUTH_TOKEN to .env.\n\n` +
       `${pc.cyan("5.")} Run the pipeline:\n` +
       `   npx tsx src/cli.ts run pipeline\n\n` +
       `${pc.cyan("6.")} Paperclip dashboard:\n` +

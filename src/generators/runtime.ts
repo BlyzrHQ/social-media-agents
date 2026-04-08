@@ -89,21 +89,28 @@ export function generateConfig(config: ProjectConfig): string {
     ? `    shopifyStore: required("SHOPIFY_STORE"),\n    shopifyAccessToken: required("SHOPIFY_ACCESS_TOKEN"),`
     : "";
 
-  return `import "dotenv/config";
+  return `import { config as loadEnv } from "dotenv";
+
+loadEnv({ path: ".env" });
+loadEnv({ path: ".env.local", override: true });
 
 export interface Config {
   openaiApiKey: string;
   googleAiKey: string | undefined;
   convexUrl: string;
-  convexAuthToken: string;
+  convexAuthToken: string | undefined;
   igUserId: string | undefined;
   igAccessToken: string | undefined;
 ${shopifyFields}
 }
 
-function required(name: string): string {
+function required(name: string, helpText?: string): string {
   const value = process.env[name];
-  if (!value) { console.error(\`Missing required environment variable: \${name}\`); process.exit(1); }
+  if (!value) {
+    console.error(\`Missing required environment variable: \${name}\`);
+    if (helpText) console.error(helpText);
+    process.exit(1);
+  }
   return value;
 }
 
@@ -114,8 +121,8 @@ export function getConfig(): Config {
   _config = {
     openaiApiKey: required("OPENAI_API_KEY"),
     googleAiKey: process.env.GOOGLE_AI_KEY || undefined,
-    convexUrl: required("CONVEX_URL"),
-    convexAuthToken: required("CONVEX_AUTH_TOKEN"),
+    convexUrl: required("CONVEX_URL", "Run \`npm run convex:dev\` first. Convex writes this to .env.local automatically."),
+    convexAuthToken: process.env.CONVEX_AUTH_TOKEN?.trim() || undefined,
     igUserId: process.env.IG_USER_ID || undefined,
     igAccessToken: process.env.IG_ACCESS_TOKEN || undefined,
 ${shopifyRequired}
@@ -133,6 +140,8 @@ import { runRatingAgent } from "./agents/rating.js";
 import { runContentBuilderAgent } from "./agents/content-builder.js";
 import { runPostingAgent } from "./agents/posting.js";
 import { convexQuery } from "./services/convex.js";
+import { syncTriggerEnv } from "./setup/trigger-sync.js";
+import { syncPaperclipTrigger } from "./setup/paperclip-sync.js";
 import type { AgentResult } from "./runner.js";
 
 const program = new Command();
@@ -191,8 +200,8 @@ program.command("config").description("Add or update API keys").action(async () 
   const keys = [
     { key: "OPENAI_API_KEY", label: "OpenAI API Key", required: true },
     { key: "GOOGLE_AI_KEY", label: "Google AI Key (Gemini)", required: false },
-    { key: "CONVEX_URL", label: "Convex URL", required: true },
-    { key: "CONVEX_AUTH_TOKEN", label: "Convex Auth Token", required: true },
+    { key: "CONVEX_URL", label: "Convex URL", required: false },
+    { key: "CONVEX_AUTH_TOKEN", label: "Convex Auth Token", required: false },
     { key: "TRIGGER_SECRET_KEY", label: "Trigger.dev Secret Key", required: false },
     { key: "IG_USER_ID", label: "Instagram User ID", required: false },
     { key: "IG_ACCESS_TOKEN", label: "Instagram Access Token", required: false },
@@ -217,29 +226,20 @@ program.command("config").description("Add or update API keys").action(async () 
 
   fs.writeFileSync(envPath, envContent.trim() + "\\n");
   console.log("\\n.env updated!");
+  console.log("Tip: \`npm run convex:dev\` writes CONVEX_URL into .env.local automatically, and this project reads .env.local too.");
 
-  // Also update Paperclip agent env vars if Docker is running
-  try {
-    const { execSync } = await import("child_process");
-    execSync("docker inspect paperclip-paperclip-1", { stdio: "pipe" });
-    console.log("Updating Paperclip agent environment variables...");
-
-    // Parse the updated .env to get key-value pairs
-    const updatedEnv = fs.readFileSync(envPath, "utf8");
-    const envVars = updatedEnv.split("\\n").filter((l: string) => l.includes("=") && !l.startsWith("#"));
-    const relevantKeys = ["OPENAI_API_KEY", "GOOGLE_AI_KEY", "CONVEX_URL", "CONVEX_AUTH_TOKEN", "TRIGGER_SECRET_KEY", "IG_USER_ID", "IG_ACCESS_TOKEN"];
-
-    for (const line of envVars) {
-      const [key, ...rest] = line.split("=");
-      const value = rest.join("=");
-      if (relevantKeys.includes(key) && value) {
-        console.log(\`  Updated \${key} in Paperclip\`);
-      }
+  if ((envContent.match(/TRIGGER_SECRET_KEY=(.*)/)?.[1] || "").trim()) {
+    try {
+      console.log("\\nSyncing Trigger.dev environment variables...");
+      await syncTriggerEnv("dev");
+      console.log("Syncing Trigger task IDs into Paperclip...");
+      syncPaperclipTrigger("dev");
+    } catch (error) {
+      console.log(\`Trigger/Paperclip sync skipped: \${error instanceof Error ? error.message : String(error)}\`);
+      console.log("Run \`npm run trigger:sync-env\` and \`npm run paperclip:sync-trigger\` after Trigger.dev init finishes.");
     }
-    console.log("Note: Restart Paperclip agents for new env vars to take effect.");
-    console.log("  You can update agent env vars in the Paperclip dashboard > Agent > Configuration");
-  } catch {
-    // Docker not running or Paperclip not set up — skip
+  } else {
+    console.log("Add TRIGGER_SECRET_KEY later, then run \`npm run trigger:sync-env\` and \`npm run paperclip:sync-trigger\`.");
   }
 
   console.log("\\nDone!");
@@ -261,25 +261,32 @@ export function generateServices(): {
   return {
     convex: `import { getConfig } from "../config.js";
 
+function convexHeaders(): Record<string, string> {
+  const { convexAuthToken } = getConfig();
+  return convexAuthToken
+    ? { "Content-Type": "application/json", Authorization: convexAuthToken }
+    : { "Content-Type": "application/json" };
+}
+
 export async function convexQuery<T = unknown>(path: string, args: Record<string, unknown> = {}): Promise<T> {
-  const { convexUrl, convexAuthToken } = getConfig();
-  const res = await fetch(\`\${convexUrl}/api/query\`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: convexAuthToken }, body: JSON.stringify({ path, args }) });
+  const { convexUrl } = getConfig();
+  const res = await fetch(\`\${convexUrl}/api/query\`, { method: "POST", headers: convexHeaders(), body: JSON.stringify({ path, args }) });
   if (!res.ok) throw new Error(\`Convex query \${path} failed: \${res.status} \${await res.text()}\`);
   const data = await res.json();
   return data.value as T;
 }
 
 export async function convexMutation<T = unknown>(path: string, args: Record<string, unknown> = {}): Promise<T> {
-  const { convexUrl, convexAuthToken } = getConfig();
-  const res = await fetch(\`\${convexUrl}/api/mutation\`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: convexAuthToken }, body: JSON.stringify({ path, args }) });
+  const { convexUrl } = getConfig();
+  const res = await fetch(\`\${convexUrl}/api/mutation\`, { method: "POST", headers: convexHeaders(), body: JSON.stringify({ path, args }) });
   if (!res.ok) throw new Error(\`Convex mutation \${path} failed: \${res.status} \${await res.text()}\`);
   const data = await res.json();
   return data.value as T;
 }
 
 export async function convexAction<T = unknown>(path: string, args: Record<string, unknown> = {}): Promise<T> {
-  const { convexUrl, convexAuthToken } = getConfig();
-  const res = await fetch(\`\${convexUrl}/api/action\`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: convexAuthToken }, body: JSON.stringify({ path, args }) });
+  const { convexUrl } = getConfig();
+  const res = await fetch(\`\${convexUrl}/api/action\`, { method: "POST", headers: convexHeaders(), body: JSON.stringify({ path, args }) });
   if (!res.ok) throw new Error(\`Convex action \${path} failed: \${res.status} \${await res.text()}\`);
   const data = await res.json();
   return data.value as T;

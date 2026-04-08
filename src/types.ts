@@ -8,6 +8,9 @@ export interface BrandConfig {
 export interface ApiKeys {
   openaiApiKey: string;
   googleAiKey?: string;
+  convexUrl?: string;
+  convexAuthToken?: string;
+  triggerSecretKey?: string;
   igUserId?: string;
   igAccessToken?: string;
   shopifyStore?: string;
