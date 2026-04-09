@@ -247,6 +247,34 @@ export const getActive = query({
 `
   );
 
+  // files.ts — image upload action
+  fs.writeFileSync(
+    path.join(dir, "files.ts"),
+    `import { v } from "convex/values";
+import { action } from "./_generated/server";
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export const uploadBase64Image = action({
+  args: { base64Data: v.string(), mimeType: v.string() },
+  handler: async (ctx, args) => {
+    const bytes = base64ToUint8Array(args.base64Data);
+    const storageId = await ctx.storage.store(new Blob([bytes as unknown as BlobPart], { type: args.mimeType }));
+    const url = await ctx.storage.getUrl(storageId);
+    if (!url) throw new Error("Failed to get storage URL");
+    return { url, storageId };
+  },
+});
+`
+  );
+
   // Seed initial templates
   const templatesSeed = config.prompts.initialTemplates
     .map(
