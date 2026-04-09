@@ -145,25 +145,28 @@ describe("generateConvexFiles", () => {
 });
 
 describe("generatePaperclipFiles", () => {
-  it("creates all Paperclip configuration files", () => {
+  it("creates all agent reference files", () => {
     const config = makeTestConfig();
     fs.mkdirSync(config.brand.projectDir, { recursive: true });
     generatePaperclipFiles(config);
 
-    const ppDir = path.join(config.brand.projectDir, "paperclip");
-    expect(fs.existsSync(path.join(ppDir, "docker-compose.yml"))).toBe(true);
-    expect(fs.existsSync(path.join(ppDir, "ceo-AGENTS.md"))).toBe(true);
-    expect(fs.existsSync(path.join(ppDir, "cmo-AGENTS.md"))).toBe(true);
-    expect(fs.existsSync(path.join(ppDir, "template-designer-AGENTS.md"))).toBe(true);
-    expect(fs.existsSync(path.join(ppDir, "TRIGGER.md"))).toBe(true);
+    const agentDir = path.join(config.brand.projectDir, "agent");
+    expect(fs.existsSync(path.join(agentDir, "AGENT.md"))).toBe(true);
+    expect(fs.existsSync(path.join(agentDir, "TRIGGER.md"))).toBe(true);
+    expect(fs.existsSync(path.join(agentDir, "SECRETS.md"))).toBe(true);
 
-    // CEO should mention brand name
-    const ceo = fs.readFileSync(path.join(ppDir, "ceo-AGENTS.md"), "utf8");
-    expect(ceo).toContain("TestBrand");
+    // Agent should mention brand name
+    const agent = fs.readFileSync(path.join(agentDir, "AGENT.md"), "utf8");
+    expect(agent).toContain("TestBrand");
 
-    // CMO should mention brand description
-    const cmo = fs.readFileSync(path.join(ppDir, "cmo-AGENTS.md"), "utf8");
-    expect(cmo).toContain("TestBrand");
+    // Trigger should have task IDs
+    const trigger = fs.readFileSync(path.join(agentDir, "TRIGGER.md"), "utf8");
+    expect(trigger).toContain("ideas");
+    expect(trigger).toContain("pipeline");
+
+    // Secrets should reference OpenAI
+    const secrets = fs.readFileSync(path.join(agentDir, "SECRETS.md"), "utf8");
+    expect(secrets).toContain("OPENAI_API_KEY");
 
     fs.rmSync(config.brand.projectDir, { recursive: true, force: true });
   });

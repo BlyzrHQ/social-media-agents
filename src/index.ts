@@ -8,7 +8,6 @@ import { generateCustomPrompts } from "./generators/agents.js";
 import { findTopPosts } from "./post-analyzer.js";
 import { scaffoldProject } from "./generators/project.js";
 import { generatePaperclipFiles } from "./generators/paperclip.js";
-import { setupPaperclip } from "./setup/paperclip.js";
 import type { ProjectConfig } from "./types.js";
 
 async function main() {
@@ -138,56 +137,24 @@ async function main() {
     console.log("Run 'npm install' manually in your project directory.");
   }
 
-  // Step 9: Set up Paperclip (automatic — no prompt)
-  let paperclipInvite = "";
-  const s6 = p.spinner();
-  s6.start("Setting up Paperclip agent orchestration...");
-  try {
-    // Check Docker first
-    execSync("docker --version", { stdio: "pipe" });
-    execSync("docker ps", { stdio: "pipe" });
-    paperclipInvite = setupPaperclip(config);
-    s6.stop("Paperclip is running with CEO, CMO, and Template Designer agents!");
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("Docker is not installed") || msg.includes("Docker is not running")) {
-      s6.stop("Docker not available — Paperclip setup skipped.");
-      console.log("Install Docker Desktop, then run:");
-      console.log(`  cd ${brand.projectDir}/paperclip && docker compose up -d`);
-    } else {
-      s6.stop("Paperclip setup had issues.");
-      console.log(`  Error: ${msg}`);
-      console.log("You can set it up manually:");
-      console.log(`  cd ${brand.projectDir}/paperclip && docker compose up -d`);
-    }
-  }
-
   // Done!
   const projectPath = path.resolve(brand.projectDir);
 
   p.note(
     `${pc.green("Your project is ready!")} Here's what to do:\n\n` +
-      `${pc.cyan("1.")} Set up Convex:\n` +
-      `   cd ${brand.projectDir} && npm run convex:dev\n` +
-      `   Leave this terminal open — Convex keeps running and writes CONVEX_URL to .env.local automatically.\n` +
-      `   Then open a second terminal in the same project for the next steps.\n\n` +
-      `${pc.cyan("2.")} Seed initial templates (in terminal #2):\n` +
+      `${pc.cyan("1.")} Set up Convex (database):\n` +
+      `   cd ${brand.projectDir} && npm run convex:dev\n\n` +
+      `${pc.cyan("2.")} Seed templates:\n` +
       `   npm run convex:seed\n\n` +
-      `${pc.cyan("3.")} Set up Trigger.dev:\n` +
-      `   cd ${brand.projectDir}\n` +
-      `   npx trigger.dev@latest init\n` +
-      `   npx trigger.dev@latest dev\n` +
-      `   Then in that same terminal run npm run config and paste TRIGGER_SECRET_KEY if you have not already.\n` +
-      `   Then run npm run trigger:sync-env to push OPENAI / GOOGLE / CONVEX keys into Trigger.dev.\n` +
-      `   Then run npm run paperclip:sync-trigger to refresh Paperclip with the Trigger secret + task IDs.\n` +
-      `   Tip: run Trigger.dev in a third terminal if you want to keep Convex open too.\n\n` +
-      `${pc.cyan("4.")} Optional auth token:\n` +
-      `   If your Convex setup requires auth for queries/mutations, add CONVEX_AUTH_TOKEN to .env.\n\n` +
-      `${pc.cyan("5.")} Run the pipeline:\n` +
+      `${pc.cyan("3.")} Run the pipeline:\n` +
       `   npx tsx src/cli.ts run pipeline\n\n` +
-      `${pc.cyan("6.")} Paperclip dashboard:\n` +
-      `   http://localhost:3100\n` +
-      (paperclipInvite ? `   Login: ${paperclipInvite}\n\n` : "\n") +
+      `${pc.cyan("4.")} Set up Trigger.dev (optional — cloud execution):\n` +
+      `   npx trigger.dev@latest init && npm run trigger:sync-env\n\n` +
+      `${pc.cyan("5.")} Agent reference files:\n` +
+      `   ${brand.projectDir}/agent/AGENT.md    — agent instructions\n` +
+      `   ${brand.projectDir}/agent/TRIGGER.md  — task commands\n` +
+      `   ${brand.projectDir}/agent/SECRETS.md  — env var reference\n\n` +
+      `   Copy these into any LLM orchestrator (Paperclip, Claude Code, Codex, etc.)\n\n` +
       `Project: ${projectPath}`,
     "Next Steps"
   );

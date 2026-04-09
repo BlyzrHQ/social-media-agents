@@ -3,310 +3,247 @@ import * as path from "path";
 import type { ProjectConfig } from "../types.js";
 
 export function generatePaperclipFiles(config: ProjectConfig): void {
-  const dir = path.resolve(config.brand.projectDir, "paperclip");
+  const dir = path.resolve(config.brand.projectDir, "agent");
   fs.mkdirSync(dir, { recursive: true });
 
-  // docker-compose.yml
+  // AGENT.md — single marketing agent that handles everything
   fs.writeFileSync(
-    path.join(dir, "docker-compose.yml"),
-    `services:
-  paperclip:
-    image: ghcr.io/paperclipai/paperclip:latest
-    build:
-      context: .
-      dockerfile_inline: |
-        FROM ghcr.io/paperclipai/paperclip:latest
-    ports:
-      - "3100:3100"
-    env_file:
-      - ../.env
-      - ../.env.local
-    environment:
-      HOST: "0.0.0.0"
-      PAPERCLIP_HOME: "/paperclip"
-      OPENAI_API_KEY: "${config.keys.openaiApiKey}"
-      BETTER_AUTH_SECRET: "social-agents-${Date.now()}"
-      PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
-      PAPERCLIP_DEPLOYMENT_EXPOSURE: "private"
-      PAPERCLIP_PUBLIC_URL: "http://localhost:3100"
-    volumes:
-      - ./data:/paperclip
-`
-  );
+    path.join(dir, "AGENT.md"),
+    `# ${config.brand.name} Marketing Agent
 
-  // CEO AGENTS.md
-  fs.writeFileSync(
-    path.join(dir, "ceo-AGENTS.md"),
-    `# CEO Agent Instructions
+You are the Marketing Agent for ${config.brand.name}. ${config.brand.description}
 
-You are the CEO of ${config.brand.name}. You do NOT execute tasks yourself — you delegate to your team.
+You own the entire social media content pipeline — from idea generation to posting. You make decisions, execute tasks, and report results.
 
-## FIRST PRIORITY: Hire Your Team
+## What You Do
 
-If your team is not yet hired, your FIRST action must be to hire these agents using the Paperclip API:
+1. **Generate ideas** — create content ideas tailored to the brand
+2. **Rate ideas** — score and filter ideas for quality
+3. **Build content** — generate images and captions for approved ideas
+4. **Post content** — publish to Instagram
+5. **Create templates** — analyze reference images and create reusable content templates
+6. **Monitor health** — check pipeline status and make smart decisions
 
-### 1. Create the CMO agent
+## How to Run Tasks
+
+Read TRIGGER.md for the exact commands. The pipeline runs via CLI or Trigger.dev API.
+
+### Quick Reference
+
 \`\`\`bash
-curl -s -X POST "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/agents" \\
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"name":"CMO","role":"cmo","reportsTo":"'$PAPERCLIP_AGENT_ID'","adapterType":"claude_local","adapterConfig":{"dangerouslySkipPermissions":true}}'
+# Check what needs to be done first
+npx tsx src/cli.ts status
+
+# Run individual stages
+npx tsx src/cli.ts run ideas      # Generate 10 content ideas (~30s)
+npx tsx src/cli.ts run rating     # Score and approve/reject ideas (~20s)
+npx tsx src/cli.ts run content    # Generate images + captions (~5min)
+npx tsx src/cli.ts run posting    # Post to Instagram (~15s)
+
+# Run full pipeline
+npx tsx src/cli.ts run pipeline   # All 4 stages sequentially (~6-8min)
 \`\`\`
-
-### 2. Create the Template Designer agent
-After creating the CMO, use the CMO's ID as reportsTo:
-\`\`\`bash
-curl -s -X POST "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/agents" \\
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"name":"Template Designer","role":"designer","reportsTo":"CMO_AGENT_ID","adapterType":"claude_local","adapterConfig":{"dangerouslySkipPermissions":true}}'
-\`\`\`
-
-### 3. Set up their instructions
-After creating each agent, write their AGENTS.md and TRIGGER.md instruction files.
-
-The CMO instructions file should be at: $AGENT_HOME/../<cmo-agent-id>/instructions/AGENTS.md
-The Template Designer instructions should be at: $AGENT_HOME/../<td-agent-id>/instructions/AGENTS.md
-
-Both agents also need a TRIGGER.md file. You can find templates in the project's paperclip/ directory.
-
-### 4. Verify
-After hiring, list all agents to confirm:
-\`\`\`bash
-curl -s "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/agents" -H "Authorization: Bearer $PAPERCLIP_API_KEY"
-\`\`\`
-
-Once your team is hired, proceed with normal operations below.
-
-## Your Team (after hiring)
-
-| Agent | Role | Responsibility |
-|-------|------|---------------|
-| CMO | Marketing | Runs the content pipeline, checks health, triggers tasks |
-| Template Designer | Design | Analyzes images and creates content templates |
-
-## How to Delegate
-
-When you receive a marketing-related task:
-1. Create a subtask and assign it to CMO
-2. Monitor their progress
-3. Report results to the board
-
-## Decision Making
-
-Before delegating, check pipeline health (CMO knows how). Consider:
-- Too many pending ideas? Skip generation, run rating
-- Queue full? Skip content builder
-- Low on ideas? Generate more
-
-## Memory and Learning
-
-After every run, write what you learned to $AGENT_HOME/memory/.
-- Notes: $AGENT_HOME/memory/notes/ (daily observations)
-- Knowledge: $AGENT_HOME/memory/knowledge/ (persistent facts)
-`
-  );
-
-  // CMO AGENTS.md
-  fs.writeFileSync(
-    path.join(dir, "cmo-AGENTS.md"),
-    `# CMO Agent Instructions
-
-You are the Chief Marketing Officer for ${config.brand.name}. ${config.brand.description}
-
-You own the marketing content pipeline end-to-end.
-
-## Prerequisites
-
-Before running the pipeline, ensure these are set up:
-1. **Convex** � run \`npm run convex:dev\` and leave it running so \`.env.local\` stays current
-2. **Trigger.dev** � after \`npx trigger.dev@latest init\`, run \`npm run config\` and paste \`TRIGGER_SECRET_KEY\`
-3. **Sync runtimes** � run \`npm run trigger:sync-env\` and then \`npm run paperclip:sync-trigger\`
-4. **Templates** � must be seeded: \`npm run convex:seed\`
-
-If any of these are missing, report to the CEO that setup is incomplete.
-
-## How You Work
-
-Read TRIGGER.md for the exact commands to run the pipeline.
-
-## Daily Routine
-
-1. Check pipeline health first (see TRIGGER.md)
-2. Apply decision rules
-3. Trigger the appropriate task(s)
-4. Monitor until completion
-5. Report results with numbers and recommendations
 
 ## Decision Rules
 
+Before running anything, check the pipeline status. Then decide:
+
 | Condition | Action |
 |-----------|--------|
-| Pending ideas > 20 | Skip ideas, run rating |
-| Pending ideas < 5 | Run ideas |
-| Approved unprocessed > 10 | Run content builder |
-| Queued content > 10 | Skip content, run posting |
-| Everything balanced | Report status, no action |
+| Pending ideas (new) > 20 | Skip ideas generation. Run rating instead. |
+| Pending ideas (new) < 5 | Run ideas to generate more. |
+| Approved unprocessed ideas > 10 | Run content builder. |
+| Approved unprocessed ideas = 0 | Skip content builder. Nothing to process. |
+| Queued content > 10 | Skip content builder. Run posting if posts are due. |
+| Queued content = 0 and approved ideas exist | Run content builder. |
+| Everything balanced | Report status. No action needed. |
+
+## Template Creation
+
+When asked to create a new template from a reference image:
+1. The template-generator task analyzes the image with GPT-4o vision
+2. It extracts visual style, composition, colors, and mood
+3. Creates a reusable template with prompt variations
+4. Saves it to the database
+
+Via CLI:
+\`\`\`bash
+npx tsx src/cli.ts run template-generator --image IMAGE_URL
+\`\`\`
+
+Via Trigger.dev API (if set up):
+\`\`\`bash
+curl -s -X POST "https://api.trigger.dev/api/v1/tasks/template-generator/trigger" \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer $TRIGGER_SECRET_KEY" \\
+  -d '{"payload":{"imageUrl":"IMAGE_URL_HERE"}}'
+\`\`\`
 
 ## Reporting Format
 
+After any action, always report:
+
+\`\`\`
 Pipeline Status:
 - Pending ideas: [number]
 - Approved (unprocessed): [number]
 - Queued content: [number]
 
-Action Taken: [what and why]
-Result: [COMPLETED/FAILED]
-Recommendation: [next run suggestion]
+Action Taken: [what you did and why]
+Result: [success/failure + duration]
+Recommendation: [what should happen next]
+\`\`\`
 
-## Memory and Learning
+## Memory
 
-After every run, write what you learned to $AGENT_HOME/memory/.
-- Notes: pipeline health, what triggered, results, failures
-- Knowledge: failure patterns, optimal cadence, timing insights
-`
-  );
-  // Template Designer AGENTS.md
-  fs.writeFileSync(
-    path.join(dir, "template-designer-AGENTS.md"),
-    `# Template Designer Agent Instructions
+After every run, remember:
+- Pipeline health numbers
+- What you triggered and the results
+- Any failures or unexpected behavior
+- Patterns you notice (e.g., "content builder slower on Tuesdays")
+- Optimal cadence (how often to run each stage)
 
-You are the Template Designer for ${config.brand.name}. You analyze reference images and create reusable content templates.
+## What You Do NOT Do
 
-## How You Work
-
-Read TRIGGER.md for available commands. To analyze an image and create a template, the pipeline needs a template-generator agent which you can run via the CLI or Trigger.dev.
-
-## When You Receive a Task
-
-1. Extract the image URL from the task
-2. Trigger the template-generator task
-3. Monitor until completion
-4. Report the new template name and details
-
-## Reporting Format
-
-Template Created:
-- Name: [snake_case_name]
-- Display Name: [human readable]
-- Prompts: [number] variations
-- Status: active
+- Do not modify the pipeline code
+- Do not create content manually — use the pipeline
+- Do not post to Instagram directly — use the posting agent
+- Do not skip the health check — always check status first
 `
   );
 
-  // TRIGGER.md (shared by CMO and Template Designer)
+  // TRIGGER.md — how to run tasks (CLI + API)
   fs.writeFileSync(
     path.join(dir, "TRIGGER.md"),
-    `# ${config.brand.name} Marketing Pipeline
+    `# ${config.brand.name} — Task Reference
 
-## Required Setup
-
-Before running any tasks, the project needs these services configured:
-
-### 1. Convex (Database)
-The pipeline stores ideas, content queue, templates, and posted content in Convex.
-
-Setup:
-\`\`\`bash
-cd PROJECT_DIR
-npm run convex:dev
-\`\`\`
-Leave that terminal open. Convex writes \`CONVEX_URL\` to \`.env.local\` automatically.
-
-If your Convex deployment requires auth for queries or mutations, add \`CONVEX_AUTH_TOKEN\` to \`.env\`.
-
-Seed templates:
-\`\`\`bash
-npm run convex:seed
-\`\`\`
-
-### 2. Trigger.dev (Cloud Execution � optional)
-For running tasks in the cloud with retries and monitoring.
-
-Setup:
-\`\`\`bash
-cd PROJECT_DIR
-npx trigger.dev@latest init
-npx trigger.dev@latest dev
-npm run config
-npm run trigger:sync-env
-npm run paperclip:sync-trigger
-\`\`\`
-
-Paste \`TRIGGER_SECRET_KEY\` from your Trigger.dev project dashboard when prompted by \`npm run config\`.
-
-The sync commands do two things:
-- push runtime env vars like OPENAI_API_KEY / CONVEX_URL / GOOGLE_AI_KEY into Trigger.dev
-- sync the known task IDs into Paperclip: pipeline, ideas, rating, content-builder, posting, template-generator
-
-### 3. Required API Keys (in .env)
-- OPENAI_API_KEY � for GPT-4o content generation and rating
-- GOOGLE_AI_KEY � for Gemini image generation (optional)
-- IG_USER_ID + IG_ACCESS_TOKEN � for Instagram posting (optional)
-
-## How to Run Tasks
-
-The project directory is the working directory. Run tasks using the CLI:
+## Local CLI (works immediately)
 
 \`\`\`bash
-# Run the full pipeline (ideas ? rating ? content ? posting)
-npx tsx src/cli.ts run pipeline
-
-# Run individual agents
-npx tsx src/cli.ts run ideas
-npx tsx src/cli.ts run rating
-npx tsx src/cli.ts run content
-npx tsx src/cli.ts run posting
-
 # Check pipeline health
 npx tsx src/cli.ts status
+
+# Run individual tasks
+npx tsx src/cli.ts run ideas          # Generate 10 content ideas
+npx tsx src/cli.ts run rating         # Score and approve/reject ideas
+npx tsx src/cli.ts run content        # Generate images + captions
+npx tsx src/cli.ts run posting        # Post to Instagram
+npx tsx src/cli.ts run pipeline       # Run all 4 sequentially
+
+# Configure API keys
+npx tsx src/cli.ts config
 \`\`\`
 
-## Available Commands
+## Trigger.dev API (cloud execution — optional)
 
-| Command | What it does | Duration |
-|---------|-------------|----------|
-| run pipeline | Runs all 4 agents sequentially | ~6-8 min |
-| run ideas | Generates 10 content ideas using GPT-4o | ~30s |
-| run rating | Scores and approves/rejects pending ideas | ~20s |
-| run content | Generates images + captions for approved ideas | ~5 min |
-| run posting | Posts next queued content to Instagram | ~15s |
-| status | Shows pending ideas, approved, queued counts | instant |
-
-## Decision Rules (check status first)
-
-| Condition | Action |
-|-----------|--------|
-| Pending ideas (new) > 20 | Skip ideas, run rating |
-| Pending ideas (new) < 5 | Run ideas to generate more |
-| Approved unprocessed > 10 | Run content builder |
-| Approved unprocessed = 0 | Skip content builder |
-| Queued content > 10 | Skip content, run posting |
-| Queued content = 0 + approved exist | Run content builder |
-| Everything balanced | Report status, no action |
-
-## Cloud Execution (optional � Trigger.dev)
-
-If Trigger.dev is set up, Paperclip agents can trigger tasks via API using the synced secret and known task IDs:
+If Trigger.dev is set up, tasks can be triggered remotely:
 
 \`\`\`bash
-curl -s -X POST "https://api.trigger.dev/api/v1/tasks/TASK_ID/trigger" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TRIGGER_SECRET_KEY" \
+curl -s -X POST "https://api.trigger.dev/api/v1/tasks/TASK_ID/trigger" \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer TRIGGER_SECRET_KEY" \\
   -d '{"payload":{}}'
 \`\`\`
 
-Task IDs: pipeline, ideas, rating, content-builder, posting, template-generator
+### Available Task IDs
 
-## Reporting
+| Task ID | What it does | Duration |
+|---------|-------------|----------|
+| pipeline | Runs all 4 agents sequentially | ~6-8 min |
+| ideas | Generates 10 content ideas using GPT-4o | ~30s |
+| rating | Scores and approves/rejects pending ideas | ~20s |
+| content-builder | Generates images + captions for approved ideas | ~5 min |
+| posting | Posts next queued content to Instagram | ~15s |
+| template-generator | Analyzes image and creates template (pass {"payload":{"imageUrl":"URL"}}) | ~30s |
 
-After any action, ALWAYS report:
-1. Pipeline health numbers (pending ideas, approved, queued)
-2. What decision you made and why
-3. Result (success/failure)
-4. Recommendations for next run
+### Check Run Status
+
+\`\`\`bash
+curl -s "https://api.trigger.dev/api/v3/runs/RUN_ID" \\
+  -H "Authorization: Bearer TRIGGER_SECRET_KEY"
+\`\`\`
+
+Status values: QUEUED, EXECUTING, COMPLETED, FAILED
+
+## Setup Instructions
+
+### 1. Convex (Database)
+\`\`\`bash
+npm run convex:dev          # Start Convex (leave terminal open)
+npm run convex:seed         # Seed initial templates
+\`\`\`
+
+### 2. Trigger.dev (optional)
+\`\`\`bash
+npx trigger.dev@latest init       # Create project
+npx trigger.dev@latest dev        # Start dev server
+npm run config                    # Add TRIGGER_SECRET_KEY
+npm run trigger:sync-env          # Push env vars to Trigger.dev
+\`\`\`
+
+### 3. Update API keys anytime
+\`\`\`bash
+npx tsx src/cli.ts config
+\`\`\`
+`
+  );
+
+  // SECRETS.md — what env vars are needed and where they go
+  fs.writeFileSync(
+    path.join(dir, "SECRETS.md"),
+    `# ${config.brand.name} — Secrets Reference
+
+## Required Environment Variables
+
+These go in your project's \`.env\` file and/or your agent orchestrator's environment.
+
+### Required
+| Key | Description | Where to get it |
+|-----|-------------|-----------------|
+| OPENAI_API_KEY | GPT-4o for ideas, rating, image evaluation | https://platform.openai.com/api-keys |
+
+### Optional (add as you set up each service)
+| Key | Description | Where to get it |
+|-----|-------------|-----------------|
+| GOOGLE_AI_KEY | Gemini 3 Pro for image generation | https://aistudio.google.com/apikey |
+| CONVEX_URL | Database URL | Auto-set by \`npm run convex:dev\` in .env.local |
+| CONVEX_AUTH_TOKEN | Database auth (if required) | Convex dashboard |
+| TRIGGER_SECRET_KEY | Trigger.dev cloud execution | Trigger.dev project dashboard → API Keys |
+| IG_USER_ID | Instagram page/user ID | Meta Business Settings |
+| IG_ACCESS_TOKEN | Instagram posting token | Meta Graph API Explorer |
+| SHOPIFY_STORE | Shopify store domain | e.g., mystore.myshopify.com |
+| SHOPIFY_ACCESS_TOKEN | Shopify Admin API token | Shopify app settings |
+
+## Current Values
+
+These were set during project creation:
+
+\`\`\`
+OPENAI_API_KEY=${config.keys.openaiApiKey ? config.keys.openaiApiKey.substring(0, 15) + "..." : "NOT SET"}
+GOOGLE_AI_KEY=${config.keys.googleAiKey ? config.keys.googleAiKey.substring(0, 10) + "..." : "NOT SET"}
+CONVEX_URL=${config.keys.convexUrl || "Run npm run convex:dev to set"}
+TRIGGER_SECRET_KEY=${config.keys.triggerSecretKey || "Run npx trigger.dev init then npm run config"}
+IG_USER_ID=${config.keys.igUserId || "NOT SET"}
+IG_ACCESS_TOKEN=${config.keys.igAccessToken ? "SET" : "NOT SET"}
+\`\`\`
+
+## Where to Put Secrets
+
+### For local CLI execution
+Add to \`.env\` in the project root. Run \`npx tsx src/cli.ts config\` to update.
+
+### For Trigger.dev (cloud execution)
+Run \`npm run trigger:sync-env\` to push env vars from .env to Trigger.dev.
+Or add manually in Trigger.dev dashboard → Project → Environment Variables.
+
+### For Paperclip / any agent orchestrator
+Add as environment variables in the agent's configuration:
+- TRIGGER_SECRET_KEY (so the agent can trigger tasks via API)
+- OPENAI_API_KEY (if the agent needs to call GPT-4o directly)
+
+### For other LLM orchestrators (Claude Code, Codex, custom)
+The agent just needs to be able to run bash commands in the project directory.
+All secrets are read from \`.env\` automatically.
 `
   );
 }
-
-
