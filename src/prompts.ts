@@ -157,9 +157,27 @@ export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean 
         }),
       triggerSecretKey: () =>
         p.text({
-          message: "Trigger.dev Secret Key (leave empty — add after npx trigger.dev init)",
+          message: "Trigger.dev Secret Key (from project dashboard → API Keys)",
           placeholder: "tr_dev_... or tr_prod_... (optional)",
           validate: () => undefined,
+        }),
+      triggerProjectRef: () =>
+        p.text({
+          message: "Trigger.dev Project Ref (from project settings → Project Ref)",
+          placeholder: "proj_... (optional)",
+          validate: (v) =>
+            v.length === 0 || v.startsWith("proj_")
+              ? undefined
+              : "Should start with proj_ or leave empty",
+        }),
+      triggerPatToken: () =>
+        p.text({
+          message: "Trigger.dev Personal Access Token (for deployment — from profile → tokens)",
+          placeholder: "tr_pat_... (optional)",
+          validate: (v) =>
+            v.length === 0 || v.startsWith("tr_pat_")
+              ? undefined
+              : "Should start with tr_pat_ or leave empty",
         }),
       hasInstagram: () =>
         p.confirm({
@@ -254,6 +272,8 @@ export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean 
     convexUrl: (keys.convexUrl as string) || undefined,
     convexAuthToken: (keys.convexAuthToken as string) || undefined,
     triggerSecretKey: (keys.triggerSecretKey as string) || undefined,
+    triggerProjectRef: (keys.triggerProjectRef as string) || undefined,
+    triggerPatToken: (keys.triggerPatToken as string) || undefined,
     igUserId,
     igAccessToken,
     shopifyStore,

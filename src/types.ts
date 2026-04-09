@@ -11,6 +11,8 @@ export interface ApiKeys {
   convexUrl?: string;
   convexAuthToken?: string;
   triggerSecretKey?: string;
+  triggerProjectRef?: string;
+  triggerPatToken?: string;
   igUserId?: string;
   igAccessToken?: string;
   shopifyStore?: string;

@@ -198,56 +198,41 @@ async function main() {
   }
 
   // Step 11: Set up Trigger.dev
-  const s8 = p.spinner();
-  s8.start("Setting up Trigger.dev...");
   let triggerDeployed = false;
-  try {
-    // Get team slug for project naming
-    let teamSlug = "";
+  if (keys.triggerProjectRef && keys.triggerPatToken) {
+    const s8 = p.spinner();
+    s8.start("Deploying to Trigger.dev...");
     try {
-      const whoami = execSync("npx convex whoami", { cwd: projectDir, stdio: "pipe", timeout: 10_000, encoding: "utf8" });
-      const teamMatch = whoami.match(/team[:\s]+(\S+)/i);
-      if (teamMatch) teamSlug = teamMatch[1];
-    } catch { /* ignore */ }
-
-    // Check if trigger CLI works (user must be logged in already)
-    execSync("npx trigger.dev@latest --version", { cwd: projectDir, stdio: "pipe", timeout: 15_000 });
-
-    // Init with existing config override
-    const triggerProject = brand.projectDir.replace(/[^a-z0-9-]/g, "-").substring(0, 30);
-    try {
+      // Deploy using PAT token
       execSync(
-        `npx trigger.dev@latest init --override-config`,
-        { cwd: projectDir, stdio: "inherit", timeout: 60_000 }
+        `npx trigger.dev@latest deploy`,
+        {
+          cwd: projectDir,
+          stdio: "inherit",
+          timeout: 120_000,
+          env: { ...process.env, TRIGGER_ACCESS_TOKEN: keys.triggerPatToken },
+        }
       );
-    } catch { /* init may fail interactively but still create config */ }
-
-    // Check if project ID was set
-    const fs2 = await import("fs");
-    const triggerConfig = fs2.readFileSync(path.join(projectDir, "trigger.config.ts"), "utf8");
-    const projectIdMatch = triggerConfig.match(/project:\s*"(proj_[^"]+)"/);
-
-    if (projectIdMatch && projectIdMatch[1] !== "TRIGGER_PROJECT_ID") {
-      // Deploy
-      try {
-        execSync(
-          `npx trigger.dev@latest deploy`,
-          { cwd: projectDir, stdio: "inherit", timeout: 120_000 }
-        );
-        triggerDeployed = true;
-      } catch { /* deploy may need PAT */ }
+      triggerDeployed = true;
 
       // Sync env vars if we have a secret key
       if (keys.triggerSecretKey) {
         try {
-          execSync("npx tsx src/setup/trigger-sync.ts prod", { cwd: projectDir, stdio: "inherit", timeout: 30_000 });
+          execSync("npx tsx src/setup/trigger-sync.ts prod", {
+            cwd: projectDir,
+            stdio: "inherit",
+            timeout: 30_000,
+          });
         } catch { /* sync optional */ }
       }
-    }
 
-    s8.stop(triggerDeployed ? "Trigger.dev deployed with 6 tasks!" : "Trigger.dev initialized — run 'npx trigger.dev@latest init' to select project.");
-  } catch {
-    s8.stop("Trigger.dev setup skipped — run 'npx trigger.dev@latest init' manually.");
+      s8.stop("Trigger.dev deployed with 6 tasks + env vars synced!");
+    } catch (err) {
+      s8.stop("Trigger.dev deploy failed: " + (err instanceof Error ? err.message : String(err)));
+    }
+  } else if (keys.triggerProjectRef) {
+    console.log("  Trigger.dev project ref set but no PAT token — deploy manually:");
+    console.log("  npx trigger.dev@latest deploy");
   }
 
   // Done!

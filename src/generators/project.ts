@@ -181,9 +181,8 @@ export function scaffoldProject(config: ProjectConfig): void {
     path.join(dir, "trigger.config.ts"),
     `import { defineConfig } from "@trigger.dev/sdk/v3";
 
-// Run 'npx trigger.dev@latest init' to replace the project ID below
 export default defineConfig({
-  project: "TRIGGER_PROJECT_ID", // replaced by 'npx trigger.dev@latest init'
+  project: "${config.keys.triggerProjectRef || "TRIGGER_PROJECT_ID"}",
   runtime: "node",
   logLevel: "log",
   maxDuration: 3600,
