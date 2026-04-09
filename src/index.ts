@@ -197,44 +197,81 @@ async function main() {
     }
   }
 
-  // Step 11: Set up Trigger.dev
+  // Step 11: Set up Trigger.dev (interactive init → auto deploy → auto sync)
   let triggerDeployed = false;
-  if (keys.triggerProjectRef && keys.triggerPatToken) {
-    const s8 = p.spinner();
-    s8.start("Deploying to Trigger.dev...");
+  const setupTrigger = await p.confirm({
+    message: "Set up Trigger.dev for cloud execution? (you'll pick a project interactively)",
+    initialValue: true,
+  });
+
+  if (!p.isCancel(setupTrigger) && setupTrigger) {
+    // Step 11a: Init (interactive — user picks project)
+    console.log("\n  Trigger.dev will ask you to select or create a project.\n");
     try {
-      // Deploy using PAT token
-      execSync(
-        `npx trigger.dev@latest deploy`,
-        {
+      execSync("npx trigger.dev@latest init --override-config", {
+        cwd: projectDir,
+        stdio: "inherit",
+        timeout: 120_000,
+      });
+    } catch { /* init may fail but still create config */ }
+
+    // Step 11b: Check if project ref was set
+    const fs2 = await import("fs");
+    const triggerConfig = fs2.readFileSync(path.join(projectDir, "trigger.config.ts"), "utf8");
+    const projectIdMatch = triggerConfig.match(/project:\s*"(proj_[^"]+)"/);
+
+    if (projectIdMatch && projectIdMatch[1] !== "TRIGGER_PROJECT_ID") {
+      // Step 11c: Deploy (auto)
+      const s8 = p.spinner();
+      s8.start("Deploying tasks to Trigger.dev...");
+      try {
+        execSync("npx trigger.dev@latest deploy", {
           cwd: projectDir,
           stdio: "inherit",
           timeout: 120_000,
-          env: { ...process.env, TRIGGER_ACCESS_TOKEN: keys.triggerPatToken },
-        }
-      );
-      triggerDeployed = true;
+        });
+        triggerDeployed = true;
+        s8.stop("Trigger.dev deployed with 6 tasks!");
+      } catch {
+        s8.stop("Deploy failed — run 'npx trigger.dev@latest deploy' manually.");
+      }
 
-      // Sync env vars if we have a secret key
+      // Step 11d: Ask for secret key if not provided yet
+      if (!keys.triggerSecretKey) {
+        const secretKey = await p.text({
+          message: "Paste your Trigger.dev Secret Key (from project dashboard → API Keys → Dev/Prod)",
+          placeholder: "tr_dev_... or tr_prod_...",
+          validate: (v) =>
+            v.length === 0 || v.startsWith("tr_")
+              ? undefined
+              : "Should start with tr_dev_ or tr_prod_",
+        });
+        if (!p.isCancel(secretKey) && secretKey) {
+          keys.triggerSecretKey = secretKey as string;
+          // Update .env
+          let envContent = fs2.readFileSync(path.join(projectDir, ".env"), "utf8");
+          envContent = envContent.replace(/TRIGGER_SECRET_KEY=.*/, `TRIGGER_SECRET_KEY=${keys.triggerSecretKey}`);
+          fs2.writeFileSync(path.join(projectDir, ".env"), envContent);
+        }
+      }
+
+      // Step 11e: Sync env vars (auto)
       if (keys.triggerSecretKey) {
-        // Detect environment from key prefix
         const triggerEnv = keys.triggerSecretKey.startsWith("tr_prod_") ? "prod" : "dev";
+        const s9 = p.spinner();
+        s9.start("Syncing env vars to Trigger.dev...");
         try {
           execSync(`npx tsx src/setup/trigger-sync.ts ${triggerEnv}`, {
             cwd: projectDir,
-            stdio: "inherit",
+            stdio: "pipe",
             timeout: 30_000,
           });
-        } catch { /* sync optional */ }
+          s9.stop("Env vars synced to Trigger.dev!");
+        } catch {
+          s9.stop("Env sync failed — run 'npx tsx src/setup/trigger-sync.ts' manually.");
+        }
       }
-
-      s8.stop("Trigger.dev deployed with 6 tasks + env vars synced!");
-    } catch (err) {
-      s8.stop("Trigger.dev deploy failed: " + (err instanceof Error ? err.message : String(err)));
     }
-  } else if (keys.triggerProjectRef) {
-    console.log("  Trigger.dev project ref set but no PAT token — deploy manually:");
-    console.log("  npx trigger.dev@latest deploy");
   }
 
   // Done!
@@ -243,7 +280,7 @@ async function main() {
     remainingSteps.push(`${pc.cyan("•")} Deploy Convex: cd ${brand.projectDir} && npx convex login && npx convex dev`);
   }
   if (!triggerDeployed) {
-    remainingSteps.push(`${pc.cyan("•")} Set up Trigger.dev: cd ${brand.projectDir} && npx trigger.dev@latest init`);
+    remainingSteps.push(`${pc.cyan("•")} Set up Trigger.dev: cd ${brand.projectDir} && npx trigger.dev@latest init && npx trigger.dev@latest deploy`);
   }
 
   p.note(
