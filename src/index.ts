@@ -217,8 +217,10 @@ async function main() {
 
       // Sync env vars if we have a secret key
       if (keys.triggerSecretKey) {
+        // Detect environment from key prefix
+        const triggerEnv = keys.triggerSecretKey.startsWith("tr_prod_") ? "prod" : "dev";
         try {
-          execSync("npx tsx src/setup/trigger-sync.ts prod", {
+          execSync(`npx tsx src/setup/trigger-sync.ts ${triggerEnv}`, {
             cwd: projectDir,
             stdio: "inherit",
             timeout: 30_000,
