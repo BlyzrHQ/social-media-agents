@@ -11,7 +11,7 @@ CONTENT TYPES: {CONTENT_TYPES}
 
 Generate a JSON response with EXACTLY this structure:
 {
-  "ideasSystemPrompt": "A system prompt for the Ideas Agent that generates content ideas specific to this brand. Include the brand name, niche, and content style. The agent has a save_idea tool. Tell it to generate 10 ideas per run using templates: educational_comparison, cinematic_stack, editorial_grid, recipe_infographic. Type must be single_image, platforms must be [ig].",
+  "ideasSystemPrompt": "A system prompt for the Ideas Agent that generates content ideas specific to this brand. Include the brand name, niche, and content style. The agent has a save_idea tool. Tell it to generate 10 ideas per run. The template field MUST be one of the template names from the initialTemplates array you generate below (use the exact 'name' field values). Type must be single_image, platforms must be [ig].",
 
   "ratingSystemPrompt": "A system prompt for the Rating Agent that scores content ideas 0-100 for this specific brand. Include 4 scoring dimensions (25 pts each) customized to their niche. The agent has tools: get_pending_ideas, approve_idea (score>=70), reject_idea (score<50), flag_for_review (50-69).",
 
@@ -381,9 +381,22 @@ export async function runContentBuilderAgent(): Promise<AgentResult> {
 
   for (const idea of ideas) {
     const templateName = (idea.template || "").trim();
-    const template = await convexQuery<any>("templates:getByName", { name: templateName });
+    let template = await convexQuery<any>("templates:getByName", { name: templateName });
 
-    const imagePrompt = template?.imagePrompts?.[0] || template?.promptTemplate || "";
+    // If template not found, pick a random active template
+    if (!template || !template.imagePrompts?.length) {
+      const allTemplates = await convexQuery<any[]>("templates:listActive");
+      if (allTemplates.length > 0) {
+        template = allTemplates[Math.floor(Math.random() * allTemplates.length)];
+        console.log(\`[CONTENT] Template "\${templateName}" not found, using "\${template.name}" instead\`);
+      }
+    }
+
+    // Pick a random image prompt from the template's variations
+    const imagePrompts = template?.imagePrompts || [];
+    const imagePrompt = imagePrompts.length > 0
+      ? imagePrompts[Math.floor(Math.random() * imagePrompts.length)]
+      : template?.promptTemplate || "";
     const captionTemplate = template?.captionTemplate || "";
     const hashtags = (template?.defaultHashtags || []).join(" ");
 
