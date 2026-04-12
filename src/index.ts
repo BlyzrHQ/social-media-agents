@@ -198,79 +198,92 @@ async function main() {
     }
   }
 
-  // Step 11: Set up Trigger.dev (interactive init → auto deploy → auto sync)
+  // Step 11: Set up Trigger.dev
   let triggerDeployed = false;
-  const setupTrigger = await p.confirm({
-    message: "Set up Trigger.dev for cloud execution? (you'll pick a project interactively)",
-    initialValue: true,
-  });
+  const fs2 = await import("fs");
 
-  if (!p.isCancel(setupTrigger) && setupTrigger) {
-    // Step 11a: Init (interactive — user picks project)
-    console.log("\n  Trigger.dev will ask you to select or create a project.\n");
-    try {
-      execSync("npx trigger.dev@latest init --override-config", {
-        cwd: projectDir,
-        stdio: "inherit",
-        timeout: 120_000,
+  // Check if we already have a project ref (from secret key or user input)
+  let triggerProjectRef = "";
+
+  // If user provided a secret key, ask for project ref too
+  if (keys.triggerSecretKey) {
+    const projRef = await p.text({
+      message: "Trigger.dev Project Ref (from dashboard → project settings)",
+      placeholder: "proj_... (or leave empty to set up later)",
+      validate: (v) =>
+        v.length === 0 || v.startsWith("proj_")
+          ? undefined
+          : "Should start with proj_",
+    });
+    if (!p.isCancel(projRef) && projRef) {
+      triggerProjectRef = projRef as string;
+    }
+  } else {
+    // No secret key — ask if they want to set up Trigger.dev at all
+    const setupTrigger = await p.confirm({
+      message: "Set up Trigger.dev for cloud execution?",
+      initialValue: false,
+    });
+
+    if (!p.isCancel(setupTrigger) && setupTrigger) {
+      const projRef = await p.text({
+        message: "Trigger.dev Project Ref",
+        placeholder: "proj_...",
+        validate: (v) =>
+          v.startsWith("proj_") ? undefined : "Should start with proj_",
       });
-    } catch { /* init may fail but still create config */ }
+      if (!p.isCancel(projRef)) triggerProjectRef = projRef as string;
 
-    // Step 11b: Check if project ref was set
-    const fs2 = await import("fs");
-    const triggerConfig = fs2.readFileSync(path.join(projectDir, "trigger.config.ts"), "utf8");
-    const projectIdMatch = triggerConfig.match(/project:\s*"(proj_[^"]+)"/);
+      const secretKey = await p.text({
+        message: "Trigger.dev Secret Key (from project → API Keys)",
+        placeholder: "tr_dev_... or tr_prod_...",
+        validate: (v) =>
+          v.startsWith("tr_") ? undefined : "Should start with tr_",
+      });
+      if (!p.isCancel(secretKey)) {
+        keys.triggerSecretKey = secretKey as string;
+        let envContent = fs2.readFileSync(path.join(projectDir, ".env"), "utf8");
+        envContent = envContent.replace(/TRIGGER_SECRET_KEY=.*/, `TRIGGER_SECRET_KEY=${keys.triggerSecretKey}`);
+        fs2.writeFileSync(path.join(projectDir, ".env"), envContent);
+      }
+    }
+  }
 
-    if (projectIdMatch && projectIdMatch[1] !== "TRIGGER_PROJECT_ID") {
-      // Step 11c: Deploy (auto)
-      const s8 = p.spinner();
-      s8.start("Deploying tasks to Trigger.dev...");
+  // Set project ref in trigger.config.ts
+  if (triggerProjectRef) {
+    let triggerConfig = fs2.readFileSync(path.join(projectDir, "trigger.config.ts"), "utf8");
+    triggerConfig = triggerConfig.replace(/TRIGGER_PROJECT_ID/, triggerProjectRef);
+    fs2.writeFileSync(path.join(projectDir, "trigger.config.ts"), triggerConfig);
+
+    // Deploy
+    const s8 = p.spinner();
+    s8.start("Deploying tasks to Trigger.dev...");
+    try {
+      // Pin versions to avoid mismatch
+      execSync("npm install @trigger.dev/sdk@4.4.3 @trigger.dev/build@4.4.3 --save-exact", {
+        cwd: projectDir, stdio: "pipe", timeout: 30_000,
+      });
+      execSync("npx trigger.dev@4.4.3 deploy", {
+        cwd: projectDir, stdio: "inherit", timeout: 120_000,
+      });
+      triggerDeployed = true;
+      s8.stop("Trigger.dev deployed with 6 tasks!");
+    } catch {
+      s8.stop("Deploy failed — run 'npx trigger.dev@4.4.3 deploy' manually.");
+    }
+
+    // Sync env vars
+    if (keys.triggerSecretKey && triggerDeployed) {
+      const triggerEnv = keys.triggerSecretKey.startsWith("tr_prod_") ? "prod" : "dev";
+      const s9 = p.spinner();
+      s9.start("Syncing env vars to Trigger.dev...");
       try {
-        execSync("npx trigger.dev@latest deploy", {
-          cwd: projectDir,
-          stdio: "inherit",
-          timeout: 120_000,
+        execSync(`npx tsx src/setup/trigger-sync.ts ${triggerEnv}`, {
+          cwd: projectDir, stdio: "pipe", timeout: 30_000,
         });
-        triggerDeployed = true;
-        s8.stop("Trigger.dev deployed with 6 tasks!");
+        s9.stop("Env vars synced to Trigger.dev!");
       } catch {
-        s8.stop("Deploy failed — run 'npx trigger.dev@latest deploy' manually.");
-      }
-
-      // Step 11d: Ask for secret key if not provided yet
-      if (!keys.triggerSecretKey) {
-        const secretKey = await p.text({
-          message: "Paste your Trigger.dev Secret Key (from project dashboard → API Keys → Dev/Prod)",
-          placeholder: "tr_dev_... or tr_prod_...",
-          validate: (v) =>
-            v.length === 0 || v.startsWith("tr_")
-              ? undefined
-              : "Should start with tr_dev_ or tr_prod_",
-        });
-        if (!p.isCancel(secretKey) && secretKey) {
-          keys.triggerSecretKey = secretKey as string;
-          // Update .env
-          let envContent = fs2.readFileSync(path.join(projectDir, ".env"), "utf8");
-          envContent = envContent.replace(/TRIGGER_SECRET_KEY=.*/, `TRIGGER_SECRET_KEY=${keys.triggerSecretKey}`);
-          fs2.writeFileSync(path.join(projectDir, ".env"), envContent);
-        }
-      }
-
-      // Step 11e: Sync env vars (auto)
-      if (keys.triggerSecretKey) {
-        const triggerEnv = keys.triggerSecretKey.startsWith("tr_prod_") ? "prod" : "dev";
-        const s9 = p.spinner();
-        s9.start("Syncing env vars to Trigger.dev...");
-        try {
-          execSync(`npx tsx src/setup/trigger-sync.ts ${triggerEnv}`, {
-            cwd: projectDir,
-            stdio: "pipe",
-            timeout: 30_000,
-          });
-          s9.stop("Env vars synced to Trigger.dev!");
-        } catch {
-          s9.stop("Env sync failed — run 'npx tsx src/setup/trigger-sync.ts' manually.");
-        }
+        s9.stop("Env sync failed — run 'npm run trigger:sync-env' manually.");
       }
     }
   }
