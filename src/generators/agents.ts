@@ -55,8 +55,11 @@ Each template's promptTemplate and imagePrompts MUST be DETAILED CREATIVE BRIEFS
 
 Use {MAIN_SUBJECT}, {THEME}, {DISH_NAME}, {CONCEPT} as placeholders where the specific content changes per post.
 
-EXAMPLE of the level of detail needed in imagePrompts:
-"Create an ultra-clean modern recipe infographic for {MAIN_SUBJECT}. HERO: Showcase the dish in finished form, slightly angled perspective with soft shadow. COMPOSITION: Hero dish centered, ingredients clustered around top half with thin connector lines, steps in strict clockwise open flow (no loop). STEPS: Use minimal cooking icons, subtle curved directional lines. BOTTOM: Clean rounded badges for prep time, cook time, servings. STYLE: Editorial infographic meets lifestyle food photography. Natural food colors, detailed textures, subtle drop shadows, clean vector icons, modern typography. BACKGROUND: Soft cream-to-warm-beige gradient, no heavy texture. LIGHTING: Soft natural studio, warm tone, gentle highlights. OUTPUT: 1080x1080 ultra-crisp Instagram-ready. STYLE DNA: Minimal editorial, clean layout, soft lifestyle realism."
+⚠️ ABSOLUTE MINIMUM LENGTH: Each imagePrompt string MUST be at least 1500 characters long. If any imagePrompt is shorter than 1500 characters, the ENTIRE response will be rejected and you will need to redo it. This is a hard technical requirement. Count your characters. Be extremely verbose and detailed in each imagePrompt. Include every subsection with multiple sentences each.
+
+EXAMPLE of the level of detail needed (this is the MINIMUM acceptable quality):
+
+"Create an ultra-clean modern recipe infographic for \\"{MAIN_SUBJECT}\\".\\n\\n## HERO DISH\\nShowcase {MAIN_SUBJECT} in a visually appealing finished form. Display 2-3 pieces slightly angled in perspective (NOT top-down), floating gently with a soft natural shadow underneath. If sliced/open: the cut section must clearly show texture of outer layer, interior filling detail, moisture and realism, natural warm tones.\\n\\n## MAIN COMPOSITION\\n{MAIN_SUBJECT} is the hero object centered. Clear visual hierarchy: Hero dish > Steps > Ingredients > Stats. Generous negative space. Clean editorial Instagram layout. No clutter. No overcrowding.\\n\\n## INGREDIENTS SECTION\\nDisplay small realistic ingredient visuals with quantities. Group clearly into labeled clusters. Place ingredient clusters evenly around the TOP HALF of the design. Use thin elegant connector lines leading subtly toward the dish. Keep spacing airy and balanced.\\n\\n## STEPS SECTION\\nArrange preparation steps in STRICT CLOCKWISE ORDER. Use an OPEN semi-circular flow. DO NOT create a closed circle. DO NOT connect the last step back to the first step. Add small minimal cooking icons beside each step. Use subtle curved directional lines guiding clockwise reading.\\n\\n## BOTTOM INFO BADGES\\nDisplay small clean rounded badges: Prep Time, Cook Time, Servings, Spice Level. Icons must be minimal and consistent.\\n\\n## VISUAL STYLE\\nEditorial infographic meets lifestyle food photography. Natural authentic food colors. Detailed texture visibility. Subtle drop shadows. Clean vector icons. Modern elegant typography. Soft cream-to-warm-beige gradient background. No heavy texture. Airy spacing.\\n\\n## LIGHTING\\nSoft natural studio lighting. Warm tone (not orange). Gentle highlights on crisp areas. Realistic depth and dimension. Balanced contrast.\\n\\n## TECHNICAL OUTPUT\\n1080x1080. Ultra-crisp. Instagram-ready.\\n\\n## STYLE DNA\\nMinimal editorial, clean layout, soft lifestyle realism, Instagram-first design."
 
 Generate 3-4 templates with DIFFERENT visual styles:
 - One modern editorial infographic style (clean, minimal, Instagram grid)
@@ -93,8 +96,12 @@ export async function generateCustomPrompts(
 
   const res = await client.chat.completions.create({
     model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: "You generate detailed JSON responses. Every imagePrompt string in your output MUST be at least 1500 characters. Be extremely verbose and descriptive. Include multiple paragraphs of detail for each section (HERO, COMPOSITION, CONTENT, STYLE, TYPOGRAPHY, BACKGROUND, LIGHTING, MOOD, OUTPUT)." },
+      { role: "user", content: prompt },
+    ],
     temperature: 0.7,
+    max_tokens: 16000,
     response_format: { type: "json_object" },
   });
 
