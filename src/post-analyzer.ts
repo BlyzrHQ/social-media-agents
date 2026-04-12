@@ -131,39 +131,45 @@ export async function findTopPosts(
         model: "gpt-4o",
         messages: [
           {
+            role: "system",
+            content: "You analyze social media posts and create detailed content templates. Each imagePrompt MUST be at least 1500 characters with full creative briefs covering HERO VISUAL, COMPOSITION, CONTENT SECTIONS, VISUAL STYLE, TYPOGRAPHY, BACKGROUND, LIGHTING, MOOD, TECHNICAL OUTPUT, and STYLE DNA. Be extremely verbose.",
+          },
+          {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Analyze this top-performing social media post and create a reusable content template for the brand "${brandName}" in the ${industry} industry.
+                text: `Analyze this top-performing Instagram post and create a reusable content template for the brand "${brandName}" in the ${industry} industry.
 
-Study EVERY visual detail — composition, layout structure, colors, typography, lighting, mood, content sections, and what makes it scroll-stopping.
+Study EVERY visual detail — composition, layout structure, colors, typography, lighting, mood, content sections, and what makes it scroll-stopping and engagement-worthy.
 
-Create a template that produces SIMILAR quality content. Each imagePrompt must be a DETAILED CREATIVE BRIEF (300-800 words) with these sections:
-1. HERO VISUAL — main subject, angle, arrangement
-2. COMPOSITION — layout structure, content blocks, flow
-3. CONTENT SECTIONS — what info appears (ingredients, steps, facts, etc.)
-4. VISUAL STYLE — artistic direction
-5. TYPOGRAPHY — headline, body, hierarchy
-6. BACKGROUND — colors, texture
-7. LIGHTING — warm/cool, shadows
-8. MOOD — feeling it evokes
-9. TECHNICAL OUTPUT — 1080x1080 (IG) or 1080x1920 (TikTok)
-10. STYLE DNA — 3-5 word summary
+Create a template that produces SIMILAR quality content. Each imagePrompt MUST be at least 1500 characters — a full creative brief with ALL these sections (multiple sentences per section):
 
-Use {MAIN_SUBJECT} and {THEME} as placeholders.
+1. HERO VISUAL — main subject, exact camera angle (overhead/3-4/eye-level), arrangement, what details should be visible, texture quality
+2. COMPOSITION — full layout structure: where hero goes, what panels/sections exist, visual flow direction, grid structure, spacing rules
+3. CONTENT SECTIONS — every info block: features/ingredients/steps/facts/comparisons/badges/stats, where each one goes
+4. VISUAL STYLE — artistic direction with specific references (e.g. "Bon Appétit meets clean Instagram design"), textures, shadows
+5. TYPOGRAPHY — exact headline style (serif/sans/script), body text style, hierarchy rules, text color with hex
+6. BACKGROUND — specific color palette, texture type (paper/marble/wood/gradient), feel
+7. LIGHTING — warm/cool, direction, shadow intensity, highlight areas, depth
+8. MOOD — 3-5 adjectives describing the feeling
+9. TECHNICAL OUTPUT — 1080x1080 for Instagram, 1080x1920 for TikTok
+10. STYLE DNA — exactly 5 words summarizing the visual identity
+11. COMPOSITION RULES — no overlapping text, readable at feed size, balanced symmetry, no watermarks
+
+Use {MAIN_SUBJECT} and {THEME} as placeholders where specific content changes per post.
 
 Return ONLY valid JSON (no markdown, no code fences):
 {
   "name": "snake_case_name",
   "displayName": "Human Readable Name",
-  "description": "What makes this style effective for engagement",
-  "promptTemplate": "DETAILED creative brief (300+ words) capturing this exact visual style",
-  "captionTemplate": "Caption template using {CONCEPT} and {HASHTAGS}",
+  "description": "What makes this style effective for engagement (2-3 sentences)",
+  "promptTemplate": "The first imagePrompt (1500+ chars)",
+  "captionTemplate": "Caption with {CONCEPT} and {HASHTAGS}",
   "imagePrompts": [
-    "Detailed creative brief variation 1 (300+ words) with {MAIN_SUBJECT}",
-    "Detailed creative brief variation 2 — different angle/composition",
-    "Detailed creative brief variation 3 — different approach"
+    "Detailed creative brief 1 (1500+ chars) with {MAIN_SUBJECT}",
+    "Detailed creative brief 2 — different angle (1500+ chars)",
+    "Detailed creative brief 3 — different approach (1500+ chars)"
   ],
   "defaultHashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
 }`,
@@ -176,6 +182,7 @@ Return ONLY valid JSON (no markdown, no code fences):
           },
         ],
         temperature: 0.7,
+        max_tokens: 8000,
         response_format: { type: "json_object" },
       });
 
@@ -184,8 +191,24 @@ Return ONLY valid JSON (no markdown, no code fences):
 
       const template = JSON.parse(content) as TemplateDefinition;
       if (template.name && template.promptTemplate) {
+        // If prompts are too short, expand them
+        const maxLen = Math.max(...(template.imagePrompts || []).map(p => p.length), 0);
+        if (maxLen < 1000 && template.imagePrompts?.length) {
+          console.log(`  Template ${i + 1}: ${template.displayName} (prompts short: ${maxLen} chars, expanding...)`);
+          try {
+            const expandRes = await client.chat.completions.create({
+              model: "gpt-4o",
+              messages: [{ role: "user", content: `Expand these imagePrompts into detailed creative briefs of at least 1500 chars each. Keep the same style but add much more detail for each section (HERO, COMPOSITION, CONTENT, STYLE, TYPOGRAPHY, BACKGROUND, LIGHTING, MOOD, OUTPUT, STYLE DNA). Use {MAIN_SUBJECT} and {THEME} as placeholders.\\n\\nCurrent prompts:\\n${JSON.stringify(template.imagePrompts)}\\n\\nReturn JSON: {"imagePrompts": ["expanded1 (1500+ chars)", "expanded2", "expanded3"]}` }],
+              temperature: 0.7,
+              max_tokens: 8000,
+              response_format: { type: "json_object" },
+            });
+            const expanded = JSON.parse(expandRes.choices[0].message.content!);
+            if (expanded.imagePrompts) template.imagePrompts = expanded.imagePrompts;
+          } catch { /* keep original if expansion fails */ }
+        }
         templates.push(template);
-        console.log(`  Template ${i + 1}: ${template.displayName}`);
+        console.log(`  Template ${i + 1}: ${template.displayName} (${template.imagePrompts?.[0]?.length || 0} chars)`);
       }
     } catch (err) {
       console.log(`  Image ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`);
