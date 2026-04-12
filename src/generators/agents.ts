@@ -179,7 +179,8 @@ Return JSON: {"imagePrompts": ["prompt1 (1500+ chars)", "prompt2", "prompt3"]}`
 
 export function generateIdeasAgent(
   prompts: GeneratedPrompts,
-  hasShopify: boolean
+  hasShopify: boolean,
+  websiteUrl?: string
 ): string {
   return `import { runAgent, type ToolDefinition, type AgentResult } from "../runner.js";
 import { convexQuery, convexMutation } from "../services/convex.js";
@@ -187,10 +188,28 @@ ${hasShopify ? 'import { fetchProducts } from "../services/shopify.js";' : ""}
 import { embed, cosineSimilarity } from "../services/embeddings.js";
 
 const SIM_THRESHOLD = 0.88;
+${websiteUrl ? `const WEBSITE_URL = ${JSON.stringify(websiteUrl)};` : ""}
 
 const SYSTEM_PROMPT = ${JSON.stringify(prompts.ideasSystemPrompt)};
 
 export async function runIdeasAgent(): Promise<AgentResult> {
+  // Fetch current website content for fresh product data
+  let websiteContext = "";
+  ${websiteUrl ? `try {
+    const jinaRes = await fetch("https://r.jina.ai/" + WEBSITE_URL, {
+      headers: { "X-Return-Format": "markdown" },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (jinaRes.ok) {
+      websiteContext = (await jinaRes.text()).substring(0, 5000);
+      console.log("[IDEAS] Fetched website content:", websiteContext.length, "chars");
+    }
+  } catch { console.log("[IDEAS] Could not fetch website, using cached data"); }` : ""}
+
+  // Fetch available templates
+  const activeTemplates = await convexQuery<any[]>("templates:listActive");
+  const templateNames = activeTemplates.map((t: any) => t.name);
+
   const [recentIdeas, events${hasShopify ? ", allProducts" : ""}] = await Promise.all([
     convexQuery<any[]>("ideas:getRecent", { limit: 200 }),
     convexQuery<any[]>("events:getActive"),
@@ -225,7 +244,11 @@ export async function runIdeasAgent(): Promise<AgentResult> {
     dedupSection = \`\\n\\n## AVOID DUPLICATES\\n\${recentConcepts.map((c: string, i: number) => \`\${i + 1}. \${c}\`).join("\\n")}\\n\\nYour new ideas must be DIFFERENT from all of the above.\`;
   }
 
-  const userMessage = \`GENERATE_IDEAS\${dedupSection}\\n\\n## ACTIVE EVENTS\\n\${eventSection}${hasShopify ? `\\n\\n## IDEA SPLIT\\n- **\${generalCount} General Ideas**\\n- **\${catalogueCount} Catalogue Ideas**\\n\\n\${hasCatalogue ? \`## PRODUCT CATALOGUE\\n\${catalogueSection}\` : ""}` : ""}\`;
+  const templateSection = "\\n\\n## AVAILABLE TEMPLATES (use ONLY these names in the template field)\\n" + templateNames.map((n: string) => "- " + n).join("\\n");
+
+  const websiteSection = websiteContext ? "\\n\\n## CURRENT WEBSITE PRODUCTS & PROMOTIONS (use these for ideas)\\n" + websiteContext : "";
+
+  const userMessage = \`GENERATE_IDEAS\${dedupSection}\${templateSection}\${websiteSection}\\n\\n## ACTIVE EVENTS\\n\${eventSection}${hasShopify ? `\\n\\n## IDEA SPLIT\\n- **\${generalCount} General Ideas**\\n- **\${catalogueCount} Catalogue Ideas**\\n\\n\${hasCatalogue ? \`## PRODUCT CATALOGUE\\n\${catalogueSection}\` : ""}` : ""}\`;
 
   const saveIdeaTool: ToolDefinition = {
     name: "save_idea",

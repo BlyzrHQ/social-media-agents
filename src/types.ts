@@ -3,6 +3,7 @@ export interface BrandConfig {
   description: string;
   contentTypes: string[];
   projectDir: string;
+  websiteUrl?: string;
 }
 
 export interface ApiKeys {

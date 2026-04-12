@@ -157,7 +157,7 @@ export function scaffoldProject(config: ProjectConfig): void {
   // Agent files
   fs.writeFileSync(
     path.join(dir, "src/agents/ideas.ts"),
-    generateIdeasAgent(config.prompts, config.hasShopify)
+    generateIdeasAgent(config.prompts, config.hasShopify, config.brand.websiteUrl)
   );
   fs.writeFileSync(
     path.join(dir, "src/agents/rating.ts"),

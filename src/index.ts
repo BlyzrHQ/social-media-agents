@@ -40,6 +40,7 @@ async function main() {
   // Step 4: Collect brand info (pre-filled if website analysis worked)
   const s1 = p.spinner();
   const brand = await collectBrandInfo(websitePrefill);
+  if (websiteUrl) brand.websiteUrl = websiteUrl as string;
 
   // Step 5: Confirm GPT-4o usage for prompt generation
   await confirmGptUsage();
