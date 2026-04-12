@@ -122,7 +122,59 @@ export async function generateCustomPrompts(
   if (!parsed.initialTemplates?.length)
     throw new Error("Missing initialTemplates");
 
+  // Expand short templates — if any imagePrompt is under 1000 chars, regenerate it individually
+  const expandedTemplates: TemplateDefinition[] = [];
+  for (const template of parsed.initialTemplates) {
+    const maxLen = Math.max(...(template.imagePrompts || []).map(p => p.length), 0);
+    if (maxLen < 1000) {
+      try {
+        const expanded = await expandTemplate(client, brand.name, websiteContent || brand.description, template);
+        expandedTemplates.push(expanded);
+      } catch {
+        expandedTemplates.push(template); // keep original if expansion fails
+      }
+    } else {
+      expandedTemplates.push(template);
+    }
+  }
+  parsed.initialTemplates = expandedTemplates;
+
   return parsed;
+}
+
+async function expandTemplate(
+  client: OpenAI,
+  brandName: string,
+  context: string,
+  template: TemplateDefinition
+): Promise<TemplateDefinition> {
+  const res = await client.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{
+      role: "user",
+      content: `Expand this template's imagePrompts into DETAILED creative briefs for ${brandName}.
+
+Current template:
+Name: ${template.name}
+Style: ${template.displayName}
+Description: ${template.description}
+
+Brand context: ${context.substring(0, 3000)}
+
+Generate 3 imagePrompts, each at least 1500 characters, covering:
+HERO VISUAL, COMPOSITION, CONTENT SECTIONS, VISUAL STYLE, TYPOGRAPHY, BACKGROUND, LIGHTING, MOOD, TECHNICAL OUTPUT (1080x1080 IG + 1080x1920 TikTok), STYLE DNA.
+
+Use {MAIN_SUBJECT} and {THEME} as placeholders.
+
+Return JSON: {"imagePrompts": ["prompt1 (1500+ chars)", "prompt2", "prompt3"]}`
+    }],
+    temperature: 0.7,
+    max_tokens: 8000,
+    response_format: { type: "json_object" },
+  });
+
+  const expanded = JSON.parse(res.choices[0].message.content!);
+  return { ...template, imagePrompts: expanded.imagePrompts || template.imagePrompts };
 }
 
 export function generateIdeasAgent(
