@@ -11,7 +11,7 @@ CONTENT TYPES: {CONTENT_TYPES}
 
 Generate a JSON response with EXACTLY this structure:
 {
-  "ideasSystemPrompt": "A system prompt for the Ideas Agent that generates content ideas specific to this brand. Include the brand name, niche, and content style. The agent has a save_idea tool. Tell it to generate 10 ideas per run. The template field MUST be one of the template names from the initialTemplates array you generate below (use the exact 'name' field values). Type must be single_image, platforms must be [ig].",
+  "ideasSystemPrompt": "A DETAILED system prompt for the Ideas Agent. MUST include: 1) The brand name and what it sells. 2) A list of SPECIFIC product categories, brands, and current promotions from the website content. 3) Rules: each idea must reference at least one real product/brand/category — no generic ideas. 4) Template field MUST be one of the template names from the initialTemplates array (use exact 'name' values). 5) Type must be single_image, platforms must be [ig]. 6) Mix different product categories across the 10 ideas. The prompt should be at least 500 chars with real product data.",
 
   "ratingSystemPrompt": "A system prompt for the Rating Agent that scores content ideas 0-100 for this specific brand. Include 4 scoring dimensions (25 pts each) customized to their niche. The agent has tools: get_pending_ideas, approve_idea (score>=70), reject_idea (score<50), flag_for_review (50-69).",
 
@@ -400,7 +400,17 @@ export async function runContentBuilderAgent(): Promise<AgentResult> {
     const captionTemplate = template?.captionTemplate || "";
     const hashtags = (template?.defaultHashtags || []).join(" ");
 
-    const context = \`IDEA: \${idea.concept}\\nTEMPLATE: \${templateName}\\nIDEA_ID: \${idea._id}\\n\\nIMAGE PROMPT (USE VERBATIM):\\n\${imagePrompt}\\n\\nCAPTION TEMPLATE:\\n\${captionTemplate}\\n\\nHASHTAGS:\\n\${hashtags}\\n\\nACTIVE EVENTS:\\n\${events.map((e: any) => e.name).join(", ") || "None"}\`;
+    // Substitute placeholders in the template prompt with the actual idea
+    const filledPrompt = imagePrompt
+      .replace(/\\{MAIN_SUBJECT\\}/g, idea.concept)
+      .replace(/\\{THEME\\}/g, idea.concept)
+      .replace(/\\{DISH_NAME\\}/g, idea.concept)
+      .replace(/\\{CONCEPT\\}/g, idea.concept);
+    const filledCaption = captionTemplate
+      .replace(/\\{CONCEPT\\}/g, idea.concept)
+      .replace(/\\{HASHTAGS\\}/g, hashtags);
+
+    const context = \`IDEA: \${idea.concept}\\nTEMPLATE: \${template?.name || templateName}\\nIDEA_ID: \${idea._id}\\n\\nIMAGE PROMPT (USE VERBATIM — placeholders already filled):\\n\${filledPrompt}\\n\\nCAPTION:\\n\${filledCaption}\\n\\nACTIVE EVENTS:\\n\${events.map((e: any) => e.name).join(", ") || "None"}\`;
 
     const generateImageTool: ToolDefinition = {
       name: "generate_image",
