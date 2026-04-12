@@ -137,19 +137,33 @@ export async function findTopPosts(
                 type: "text",
                 text: `Analyze this top-performing social media post and create a reusable content template for the brand "${brandName}" in the ${industry} industry.
 
-Study what makes it visually effective — composition, colors, styling, mood — and create a template others can use to produce similar content.
+Study EVERY visual detail — composition, layout structure, colors, typography, lighting, mood, content sections, and what makes it scroll-stopping.
+
+Create a template that produces SIMILAR quality content. Each imagePrompt must be a DETAILED CREATIVE BRIEF (300-800 words) with these sections:
+1. HERO VISUAL — main subject, angle, arrangement
+2. COMPOSITION — layout structure, content blocks, flow
+3. CONTENT SECTIONS — what info appears (ingredients, steps, facts, etc.)
+4. VISUAL STYLE — artistic direction
+5. TYPOGRAPHY — headline, body, hierarchy
+6. BACKGROUND — colors, texture
+7. LIGHTING — warm/cool, shadows
+8. MOOD — feeling it evokes
+9. TECHNICAL OUTPUT — 1080x1080 (IG) or 1080x1920 (TikTok)
+10. STYLE DNA — 3-5 word summary
+
+Use {MAIN_SUBJECT} and {THEME} as placeholders.
 
 Return ONLY valid JSON (no markdown, no code fences):
 {
-  "name": "snake_case_name (e.g. warm_overhead_spread, minimal_product_hero)",
+  "name": "snake_case_name",
   "displayName": "Human Readable Name",
   "description": "What makes this style effective for engagement",
-  "promptTemplate": "Detailed image generation prompt capturing this exact visual style, using {MAIN_SUBJECT} and {THEME} as placeholders",
-  "captionTemplate": "Instagram caption template in this content's tone, using {CONCEPT} and {HASHTAGS}",
+  "promptTemplate": "DETAILED creative brief (300+ words) capturing this exact visual style",
+  "captionTemplate": "Caption template using {CONCEPT} and {HASHTAGS}",
   "imagePrompts": [
-    "Prompt variation 1 with {MAIN_SUBJECT}",
-    "Prompt variation 2 with {MAIN_SUBJECT}",
-    "Prompt variation 3 with {MAIN_SUBJECT}"
+    "Detailed creative brief variation 1 (300+ words) with {MAIN_SUBJECT}",
+    "Detailed creative brief variation 2 — different angle/composition",
+    "Detailed creative brief variation 3 — different approach"
   ],
   "defaultHashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
 }`,

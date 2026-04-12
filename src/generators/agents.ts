@@ -23,20 +23,46 @@ Generate a JSON response with EXACTLY this structure:
 
   "initialTemplates": [
     {
-      "name": "snake_case_name",
-      "displayName": "Human Readable Name",
-      "description": "What this template is for",
-      "promptTemplate": "Detailed image generation prompt with {MAIN_SUBJECT} and {THEME} placeholders, styled for this brand",
+      "name": "snake_case_style_name",
+      "displayName": "Human Readable Style Name",
+      "description": "What this template style is for and why it works for engagement",
+      "promptTemplate": "A COMPREHENSIVE creative brief for image generation. See TEMPLATE PROMPT RULES below.",
       "captionTemplate": "Instagram caption template with {CONCEPT} and {HASHTAGS} placeholders, matching brand voice",
       "imagePrompts": [
-        "Full image prompt variation 1 with {MAIN_SUBJECT} placeholder",
-        "Full image prompt variation 2 with {MAIN_SUBJECT} placeholder",
-        "Full image prompt variation 3 with {MAIN_SUBJECT} placeholder"
+        "Full detailed creative brief variation 1 — see TEMPLATE PROMPT RULES",
+        "Full detailed creative brief variation 2 — different composition angle",
+        "Full detailed creative brief variation 3 — different visual approach"
       ],
       "defaultHashtags": ["#relevant", "#hashtags"]
     }
   ]
 }
+
+## TEMPLATE PROMPT RULES (CRITICAL — READ CAREFULLY)
+
+Each template's promptTemplate and imagePrompts MUST be DETAILED CREATIVE BRIEFS, not short descriptions. Each prompt should be 300-800 words and include ALL of these sections:
+
+1. **HERO VISUAL** — what is the main subject, how is it displayed (angle, arrangement, presentation)
+2. **COMPOSITION** — layout structure (center hero, side panels, grid, clockwise flow, etc.)
+3. **CONTENT SECTIONS** — what information blocks appear (ingredients, steps, facts, comparisons)
+4. **VISUAL STYLE** — artistic direction (editorial, illustrated, photographic, minimal, heritage, etc.)
+5. **TYPOGRAPHY** — headline style, body text, hierarchy
+6. **BACKGROUND** — color palette, texture, gradient
+7. **LIGHTING** — warm/cool, studio/natural, shadows
+8. **MOOD** — what feeling it evokes
+9. **TECHNICAL OUTPUT** — 1080x1080 for Instagram, 1080x1920 for TikTok
+10. **STYLE DNA** — 3-5 word style summary
+
+Use {MAIN_SUBJECT}, {THEME}, {DISH_NAME}, {CONCEPT} as placeholders where the specific content changes per post.
+
+EXAMPLE of the level of detail needed in imagePrompts:
+"Create an ultra-clean modern recipe infographic for {MAIN_SUBJECT}. HERO: Showcase the dish in finished form, slightly angled perspective with soft shadow. COMPOSITION: Hero dish centered, ingredients clustered around top half with thin connector lines, steps in strict clockwise open flow (no loop). STEPS: Use minimal cooking icons, subtle curved directional lines. BOTTOM: Clean rounded badges for prep time, cook time, servings. STYLE: Editorial infographic meets lifestyle food photography. Natural food colors, detailed textures, subtle drop shadows, clean vector icons, modern typography. BACKGROUND: Soft cream-to-warm-beige gradient, no heavy texture. LIGHTING: Soft natural studio, warm tone, gentle highlights. OUTPUT: 1080x1080 ultra-crisp Instagram-ready. STYLE DNA: Minimal editorial, clean layout, soft lifestyle realism."
+
+Generate 3-4 templates with DIFFERENT visual styles:
+- One modern editorial infographic style (clean, minimal, Instagram grid)
+- One heritage/illustrated poster style (hand-drawn, cultural, vintage feel)
+- One cinematic food photography style (dramatic lighting, close-up, moody)
+- One educational comparison style (side-by-side, facts, clean layout)
 
 CRITICAL RULES FOR QUALITY:
 - Every prompt MUST mention the brand name and its specific products/services
@@ -45,7 +71,7 @@ CRITICAL RULES FOR QUALITY:
 - Hashtags must include brand-specific tags, not just generic ones
 - Scoring criteria must be tailored to what matters for THIS brand, not generic marketing
 - If website content is provided, use specific product names, categories, and language from the site
-- Generate 3-4 templates that match the brand's actual content, not generic social media templates
+- IMAGE PROMPTS MUST BE DETAILED CREATIVE BRIEFS (300-800 words each), NOT short descriptions
 
 IMPORTANT: Return ONLY valid JSON, no markdown, no code fences.`;
 
@@ -471,11 +497,24 @@ import { getConfig } from "../config.js";
 const SYSTEM_PROMPT = \`You are a Template Designer. Analyze reference images and create reusable content templates.
 
 Tools:
-1. analyze_image - Study the reference image
+1. analyze_image - Study the reference image in extreme detail
 2. list_templates - Check existing templates
 3. save_template - Save new template
 
-Workflow: analyze image, check for duplicates, create and save template with promptTemplate, captionTemplate, imagePrompts (3+ variations), and defaultHashtags.\`;
+CRITICAL: Each imagePrompt you create must be a DETAILED CREATIVE BRIEF (300-800 words) covering:
+1. HERO VISUAL - main subject, angle, arrangement, presentation
+2. COMPOSITION - layout structure, content blocks, visual flow
+3. CONTENT SECTIONS - what info blocks appear and where
+4. VISUAL STYLE - artistic direction (editorial, illustrated, photographic, etc.)
+5. TYPOGRAPHY - headline style, body text, hierarchy
+6. BACKGROUND - color palette, texture, gradient
+7. LIGHTING - warm/cool, studio/natural, shadows
+8. MOOD - what feeling it evokes
+9. TECHNICAL OUTPUT - 1080x1080 for Instagram, 1080x1920 for TikTok
+10. STYLE DNA - 3-5 word style summary
+
+Use {MAIN_SUBJECT} and {THEME} as placeholders. Generate 3 prompt variations with different compositions.
+Do NOT write short generic prompts like "photo of food". Write full creative briefs.\`;
 
 export async function runTemplateGeneratorAgent(imageUrl: string): Promise<AgentResult> {
   const analyzeImageTool: ToolDefinition = {
