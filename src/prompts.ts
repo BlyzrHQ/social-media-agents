@@ -166,6 +166,11 @@ export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean 
           message: "Do you want to connect Instagram for posting?",
           initialValue: false,
         }),
+      hasTiktok: () =>
+        p.confirm({
+          message: "Do you want to connect TikTok for posting?",
+          initialValue: false,
+        }),
       hasShopify: () =>
         p.confirm({
           message: "Do you have a Shopify store to connect?",
@@ -212,6 +217,37 @@ export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean 
     igAccessToken = ig.token;
   }
 
+  let tiktokAccessToken: string | undefined;
+  let tiktokOpenId: string | undefined;
+
+  if (keys.hasTiktok) {
+    const tt = await p.group(
+      {
+        token: () =>
+          p.text({
+            message: "TikTok Access Token",
+            placeholder: "act.xxx... (from TikTok Developer Portal)",
+            validate: (v) =>
+              v.length > 10 ? undefined : "Please enter a valid TikTok access token",
+          }),
+        openId: () =>
+          p.text({
+            message: "TikTok Open ID (user identifier)",
+            placeholder: "optional — leave empty if unknown",
+            validate: () => undefined,
+          }),
+      },
+      {
+        onCancel: () => {
+          p.cancel("Setup cancelled.");
+          process.exit(0);
+        },
+      }
+    );
+    tiktokAccessToken = tt.token;
+    tiktokOpenId = tt.openId || undefined;
+  }
+
   let shopifyStore: string | undefined;
   let shopifyAccessToken: string | undefined;
 
@@ -256,6 +292,8 @@ export async function collectApiKeys(): Promise<ApiKeys & { hasShopify: boolean 
     triggerSecretKey: (keys.triggerSecretKey as string) || undefined,
     igUserId,
     igAccessToken,
+    tiktokAccessToken,
+    tiktokOpenId,
     shopifyStore,
     shopifyAccessToken,
     hasShopify: keys.hasShopify as boolean,

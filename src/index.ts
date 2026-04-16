@@ -7,7 +7,6 @@ import { collectBrandInfo, askForWebsite, analyzeWebsiteUrl, collectApiKeys, con
 import { generateCustomPrompts } from "./generators/agents.js";
 import { findTopPosts } from "./post-analyzer.js";
 import { scaffoldProject } from "./generators/project.js";
-import { generatePaperclipFiles } from "./generators/paperclip.js";
 import type { ProjectConfig } from "./types.js";
 
 async function main() {
@@ -20,8 +19,7 @@ async function main() {
       "You will need:\n" +
       `  ${pc.cyan("OpenAI API key")} — for content generation\n` +
       `  ${pc.cyan("Google AI key")} — for image generation (Gemini)\n` +
-      `  ${pc.cyan("Instagram credentials")} — for posting\n` +
-      `  ${pc.cyan("Docker")} — for Paperclip agent orchestration`,
+      `  ${pc.cyan("Instagram credentials")} — for posting`,
     "Welcome"
   );
 
@@ -112,18 +110,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Step 6: Generate Paperclip files
-  const s4 = p.spinner();
-  s4.start("Generating Paperclip agent configurations...");
-  try {
-    generatePaperclipFiles(config);
-    s4.stop("Paperclip configs generated!");
-  } catch (err) {
-    s4.stop("Failed to generate Paperclip files");
-    console.error(err);
-  }
-
-  // Step 8: Install dependencies
+  // Step 6: Install dependencies
   const s5 = p.spinner();
   s5.start("Installing dependencies...");
   try {

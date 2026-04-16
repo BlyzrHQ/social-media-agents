@@ -53,7 +53,7 @@ Each template's promptTemplate and imagePrompts MUST be DETAILED CREATIVE BRIEFS
 9. **TECHNICAL OUTPUT** — 1080x1080 for Instagram, 1080x1920 for TikTok
 10. **STYLE DNA** — 3-5 word style summary
 
-Use {MAIN_SUBJECT}, {THEME}, {DISH_NAME}, {CONCEPT} as placeholders where the specific content changes per post.
+⚠️ PLACEHOLDER RULE (MANDATORY): Every promptTemplate and every imagePrompt MUST use {MAIN_SUBJECT} and/or {THEME} as placeholders where the specific product/concept appears. DO NOT hardcode specific product names (e.g. "Carhartt Jacket", "Cotton Work Shirt") — if you hardcode a product, the template will be REJECTED. The template must be reusable across many different ideas. Use {MAIN_SUBJECT}, {THEME}, {DISH_NAME}, {CONCEPT} as placeholders. The promptTemplate MUST be a complete 1500+ char creative brief itself (not a short description, not a placeholder like "The first imagePrompt").
 
 ⚠️ ABSOLUTE MINIMUM LENGTH: Each imagePrompt string MUST be at least 1500 characters long. If any imagePrompt is shorter than 1500 characters, the ENTIRE response will be rejected and you will need to redo it. This is a hard technical requirement. Count your characters. Be extremely verbose and detailed in each imagePrompt. Include every subsection with multiple sentences each.
 
@@ -122,16 +122,27 @@ export async function generateCustomPrompts(
   if (!parsed.initialTemplates?.length)
     throw new Error("Missing initialTemplates");
 
-  // Expand short templates — if any imagePrompt is under 1000 chars, regenerate it individually
+  // Validate + expand templates. Reject if:
+  // - promptTemplate is short or a literal placeholder
+  // - no imagePrompt uses {MAIN_SUBJECT} (would bake in a specific product)
+  // - imagePrompts are under 1000 chars
   const expandedTemplates: TemplateDefinition[] = [];
   for (const template of parsed.initialTemplates) {
-    const maxLen = Math.max(...(template.imagePrompts || []).map(p => p.length), 0);
-    if (maxLen < 1000) {
+    const prompts = template.imagePrompts || [];
+    const maxLen = Math.max(...prompts.map((p) => p.length), 0);
+    const usesPlaceholder = prompts.some((p) => /\{MAIN_SUBJECT\}|\{THEME\}|\{CONCEPT\}|\{DISH_NAME\}/.test(p));
+    const promptTemplateBroken =
+      !template.promptTemplate ||
+      template.promptTemplate.length < 200 ||
+      /1500\+?\s*chars|first imagePrompt|placeholder/i.test(template.promptTemplate);
+    const needsFix = maxLen < 1000 || !usesPlaceholder || promptTemplateBroken;
+
+    if (needsFix) {
       try {
         const expanded = await expandTemplate(client, brand.name, websiteContent || brand.description, template);
         expandedTemplates.push(expanded);
       } catch {
-        expandedTemplates.push(template); // keep original if expansion fails
+        expandedTemplates.push(template);
       }
     } else {
       expandedTemplates.push(template);
@@ -150,9 +161,14 @@ async function expandTemplate(
 ): Promise<TemplateDefinition> {
   const res = await client.chat.completions.create({
     model: "gpt-4o",
-    messages: [{
-      role: "user",
-      content: `Expand this template's imagePrompts into DETAILED creative briefs for ${brandName}.
+    messages: [
+      {
+        role: "system",
+        content: "You write detailed image-generation creative briefs. Every brief is 1500+ chars and MUST use {MAIN_SUBJECT} and {THEME} placeholders — NEVER hardcode specific product names. Templates must be reusable across many different ideas.",
+      },
+      {
+        role: "user",
+        content: `Rewrite this template for ${brandName} so it's reusable across many different ideas.
 
 Current template:
 Name: ${template.name}
@@ -161,20 +177,28 @@ Description: ${template.description}
 
 Brand context: ${context.substring(0, 3000)}
 
-Generate 3 imagePrompts, each at least 1500 characters, covering:
-HERO VISUAL, COMPOSITION, CONTENT SECTIONS, VISUAL STYLE, TYPOGRAPHY, BACKGROUND, LIGHTING, MOOD, TECHNICAL OUTPUT (1080x1080 IG + 1080x1920 TikTok), STYLE DNA.
+Generate:
+1. A promptTemplate (1500+ chars) — the canonical creative brief for this style
+2. 3 imagePrompts (each 1500+ chars) — variations of the promptTemplate with different compositions/angles
 
-Use {MAIN_SUBJECT} and {THEME} as placeholders.
+Every prompt MUST use {MAIN_SUBJECT} and {THEME} as placeholders where the specific product/concept appears. DO NOT hardcode product names like "Carhartt Jacket" or "Cotton Work Shirt". The brand context is only to guide visual style and tone — the actual subject changes per post.
 
-Return JSON: {"imagePrompts": ["prompt1 (1500+ chars)", "prompt2", "prompt3"]}`
-    }],
+Each brief covers: HERO VISUAL, COMPOSITION, CONTENT SECTIONS, VISUAL STYLE, TYPOGRAPHY, BACKGROUND, LIGHTING, MOOD, TECHNICAL OUTPUT (1080x1080 IG + 1080x1920 TikTok), STYLE DNA.
+
+Return JSON: {"promptTemplate": "...1500+ chars with {MAIN_SUBJECT}...", "imagePrompts": ["1500+ chars with {MAIN_SUBJECT}", "...", "..."]}`,
+      },
+    ],
     temperature: 0.7,
-    max_tokens: 8000,
+    max_tokens: 12000,
     response_format: { type: "json_object" },
   });
 
   const expanded = JSON.parse(res.choices[0].message.content!);
-  return { ...template, imagePrompts: expanded.imagePrompts || template.imagePrompts };
+  return {
+    ...template,
+    promptTemplate: expanded.promptTemplate || template.promptTemplate,
+    imagePrompts: expanded.imagePrompts || template.imagePrompts,
+  };
 }
 
 export function generateIdeasAgent(

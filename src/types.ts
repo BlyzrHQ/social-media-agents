@@ -14,6 +14,8 @@ export interface ApiKeys {
   triggerSecretKey?: string;
   igUserId?: string;
   igAccessToken?: string;
+  tiktokAccessToken?: string;
+  tiktokOpenId?: string;
   shopifyStore?: string;
   shopifyAccessToken?: string;
 }

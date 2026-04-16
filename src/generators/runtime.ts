@@ -141,7 +141,6 @@ import { runContentBuilderAgent } from "./agents/content-builder.js";
 import { runPostingAgent } from "./agents/posting.js";
 import { convexQuery } from "./services/convex.js";
 import { syncTriggerEnv } from "./setup/trigger-sync.js";
-import { syncPaperclipTrigger } from "./setup/paperclip-sync.js";
 import type { AgentResult } from "./runner.js";
 
 const program = new Command();
@@ -232,14 +231,12 @@ program.command("config").description("Add or update API keys").action(async () 
     try {
       console.log("\\nSyncing Trigger.dev environment variables...");
       await syncTriggerEnv("dev");
-      console.log("Syncing Trigger task IDs into Paperclip...");
-      syncPaperclipTrigger("dev");
     } catch (error) {
-      console.log(\`Trigger/Paperclip sync skipped: \${error instanceof Error ? error.message : String(error)}\`);
-      console.log("Run \`npm run trigger:sync-env\` and \`npm run paperclip:sync-trigger\` after Trigger.dev init finishes.");
+      console.log(\`Trigger sync skipped: \${error instanceof Error ? error.message : String(error)}\`);
+      console.log("Run \`npm run trigger:sync-env\` after Trigger.dev init finishes.");
     }
   } else {
-    console.log("Add TRIGGER_SECRET_KEY later, then run \`npm run trigger:sync-env\` and \`npm run paperclip:sync-trigger\`.");
+    console.log("Add TRIGGER_SECRET_KEY later, then run \`npm run trigger:sync-env\`.");
   }
 
   console.log("\\nDone!");

@@ -8,10 +8,7 @@ import {
   generateCli,
   generateServices,
 } from "./runtime.js";
-import {
-  generateTriggerSync,
-  generatePaperclipTriggerSync,
-} from "./setup.js";
+import { generateTriggerSync } from "./setup.js";
 import {
   generateIdeasAgent,
   generateRatingAgent,
@@ -55,7 +52,6 @@ export function scaffoldProject(config: ProjectConfig): void {
           "convex:dev": "convex dev",
           "convex:seed": "convex run seed:seedTemplates",
           "trigger:sync-env": "tsx src/setup/trigger-sync.ts dev",
-          "paperclip:sync-trigger": "tsx src/setup/paperclip-sync.ts dev",
           test: "vitest run",
         },
         dependencies: {
@@ -113,6 +109,8 @@ export function scaffoldProject(config: ProjectConfig): void {
     `TRIGGER_SECRET_KEY=${config.keys.triggerSecretKey || ""}`,
     `IG_USER_ID=${config.keys.igUserId || ""}`,
     `IG_ACCESS_TOKEN=${config.keys.igAccessToken || ""}`,
+    `TIKTOK_ACCESS_TOKEN=${config.keys.tiktokAccessToken || ""}`,
+    `TIKTOK_OPEN_ID=${config.keys.tiktokOpenId || ""}`,
   ];
   if (config.hasShopify) {
     envLines.push(`SHOPIFY_STORE=${config.keys.shopifyStore || ""}`);
@@ -139,7 +137,6 @@ export function scaffoldProject(config: ProjectConfig): void {
   fs.writeFileSync(path.join(dir, "src/config.ts"), generateConfig(config));
   fs.writeFileSync(path.join(dir, "src/cli.ts"), generateCli(config));
   fs.writeFileSync(path.join(dir, "src/setup/trigger-sync.ts"), generateTriggerSync());
-  fs.writeFileSync(path.join(dir, "src/setup/paperclip-sync.ts"), generatePaperclipTriggerSync());
 
   // Service files
   const services = generateServices();

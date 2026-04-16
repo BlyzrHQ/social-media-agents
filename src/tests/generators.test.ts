@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { scaffoldProject } from "../generators/project.js";
 import { generateConvexFiles } from "../generators/convex.js";
-import { generatePaperclipFiles } from "../generators/paperclip.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -144,30 +143,3 @@ describe("generateConvexFiles", () => {
   });
 });
 
-describe("generatePaperclipFiles", () => {
-  it("creates all agent reference files", () => {
-    const config = makeTestConfig();
-    fs.mkdirSync(config.brand.projectDir, { recursive: true });
-    generatePaperclipFiles(config);
-
-    const agentDir = path.join(config.brand.projectDir, "agent");
-    expect(fs.existsSync(path.join(agentDir, "AGENT.md"))).toBe(true);
-    expect(fs.existsSync(path.join(agentDir, "TRIGGER.md"))).toBe(true);
-    expect(fs.existsSync(path.join(agentDir, "SECRETS.md"))).toBe(true);
-
-    // Agent should mention brand name
-    const agent = fs.readFileSync(path.join(agentDir, "AGENT.md"), "utf8");
-    expect(agent).toContain("TestBrand");
-
-    // Trigger should have task IDs
-    const trigger = fs.readFileSync(path.join(agentDir, "TRIGGER.md"), "utf8");
-    expect(trigger).toContain("ideas");
-    expect(trigger).toContain("pipeline");
-
-    // Secrets should reference OpenAI
-    const secrets = fs.readFileSync(path.join(agentDir, "SECRETS.md"), "utf8");
-    expect(secrets).toContain("OPENAI_API_KEY");
-
-    fs.rmSync(config.brand.projectDir, { recursive: true, force: true });
-  });
-});
